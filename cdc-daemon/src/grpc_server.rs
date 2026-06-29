@@ -37,7 +37,7 @@ pub enum DaemonCommand {
 
 pub struct PipelineRuntime {
     pub config_subscription: String,
-    pub target_index: String,
+    pub target_collection: String,
     pub cursor_name: String,
     pub state: String,
     pub cancel_token: CancellationToken,
@@ -69,12 +69,14 @@ impl CdcManagement for CdcGrpcService {
         let pipelines = self.state.pipelines.read().await;
         let mut components = HashMap::new();
         let mut is_healthy = true;
+
         for (_, rt) in pipelines.iter() {
             if rt.state == "ERROR" {
                 is_healthy = false;
             }
             components.insert(rt.config_subscription.clone(), rt.state.clone());
         }
+
         Ok(Response::new(HealthResponse {
             is_healthy,
             overall_status: if is_healthy {
@@ -107,11 +109,12 @@ impl CdcManagement for CdcGrpcService {
             .values()
             .map(|rt| PipelineStatus {
                 subscription_name: rt.config_subscription.clone(),
-                target_index: rt.target_index.clone(),
+                target_index: rt.target_collection.clone(),
                 cursor_name: rt.cursor_name.clone(),
                 state: rt.state.clone(),
             })
             .collect();
+
         Ok(Response::new(ListPipelinesResponse {
             pipelines: statuses,
         }))
@@ -123,6 +126,7 @@ impl CdcManagement for CdcGrpcService {
     ) -> Result<Response<PipelineControlResponse>, Status> {
         let sub_name = req.into_inner().subscription_name;
         let pipelines = self.state.pipelines.read().await;
+
         if let Some(rt) = pipelines.get(&sub_name) {
             rt.cancel_token.cancel();
             Ok(Response::new(PipelineControlResponse {
@@ -189,6 +193,7 @@ pub async fn start_grpc_server(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("0.0.0.0:{port}").parse()?;
     tracing::info!("gRPC Management Server listening on {}", addr);
+
     Server::builder()
         .add_service(CdcManagementServer::new(CdcGrpcService {
             state,
@@ -196,5 +201,6 @@ pub async fn start_grpc_server(
         }))
         .serve(addr)
         .await?;
+
     Ok(())
 }

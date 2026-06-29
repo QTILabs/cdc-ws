@@ -1,122 +1,56 @@
-use crate::constants::{
-    CONSUMER_CONCURRENCY, MAX_RETRIES, OS_WRITE_BACKOFF_INITIAL_SECS, OS_WRITE_BACKOFF_MAX_SECS,
-    TIMEOUT_DURATION,
-};
+use crate::constants::CONSUMER_CONCURRENCY;
+use crate::grpc_server::DaemonState;
 use crate::metrics::PipelineMetrics;
+use crate::opensearch::process_opensearch_packet;
 use crate::postgres::StreamBatch;
+use crate::qdrant::process_qdrant_packet;
 use futures_util::StreamExt;
-use opensearch::{BulkParts, OpenSearch, http::request::JsonBody};
-use opentelemetry::KeyValue;
-use serde_json::{Value, json};
+use opensearch::OpenSearch;
+use qdrant_client::Qdrant;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::error;
 
+/// Main consumer loop that routes incoming batches to the appropriate sink
+/// based on the `sink_type` field in the StreamBatch.
 pub async fn run_consumer_loop(
     rx_stream: ReceiverStream<StreamBatch>,
-    os_client: Arc<OpenSearch>,
+    os_client: Option<Arc<OpenSearch>>,
+    qdrant_client: Option<Arc<Qdrant>>,
     metrics: Arc<PipelineMetrics>,
-    daemon_state: Arc<crate::grpc_server::DaemonState>,
+    daemon_state: Arc<DaemonState>,
 ) {
     rx_stream
         .for_each_concurrent(CONSUMER_CONCURRENCY, |packet| {
             let os_cl = os_client.clone();
+            let q_cl = qdrant_client.clone();
             let m_cl = metrics.clone();
             let ds_cl = daemon_state.clone();
+
             async move {
-                process_packet(packet, os_cl, m_cl, ds_cl).await;
+                match packet.sink_type.as_str() {
+                    "opensearch" => {
+                        if let Some(os_client) = os_cl {
+                            process_opensearch_packet(packet, os_client, m_cl, ds_cl).await;
+                        } else {
+                            error!("OpenSearch sink requested but client is not configured. Dropping batch.");
+                        }
+                    }
+                    "qdrant" => {
+                        if let Some(qdrant_client) = q_cl {
+                            process_qdrant_packet(packet, qdrant_client, m_cl, ds_cl).await;
+                        } else {
+                            error!("Qdrant sink requested but client is not configured. Dropping batch.");
+                        }
+                    }
+                    unknown => {
+                        error!(
+                            "Unknown sink_type '{}' configured in pipeline. Dropping batch.",
+                            unknown
+                        );
+                    }
+                }
             }
         })
         .await;
-}
-
-async fn process_packet(
-    packet: StreamBatch,
-    os_cl: Arc<OpenSearch>,
-    m_cl: Arc<PipelineMetrics>,
-    daemon_state: Arc<crate::grpc_server::DaemonState>,
-) {
-    let mut bulk_bodies: Vec<Value> = Vec::new();
-    let mut tracking_count: usize = 0;
-    let labels = [KeyValue::new("target_index", packet.target_index.clone())];
-
-    for row in packet.rows {
-        let op = row.get("op").and_then(|v| v.as_str()).unwrap_or("INSERT");
-        let doc_id = row
-            .get(&packet.id_field)
-            .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .unwrap_or_default();
-        if doc_id.is_empty() {
-            continue;
-        }
-
-        match op {
-            "INSERT" | "UPDATE_INSERT" => {
-                bulk_bodies.push(json!({ "index": { "_id": doc_id } }));
-                bulk_bodies.push(row);
-                tracking_count += 1;
-            }
-            "DELETE" | "UPDATE_DELETE" => {
-                bulk_bodies.push(json!({ "delete": { "_id": doc_id } }));
-                tracking_count += 1;
-            }
-            _ => {}
-        }
-    }
-    if bulk_bodies.is_empty() {
-        return;
-    }
-
-    let _ = submit_bulk(
-        os_cl,
-        bulk_bodies,
-        tracking_count,
-        &packet.target_index,
-        m_cl,
-        daemon_state,
-        &labels,
-    )
-    .await;
-}
-
-async fn submit_bulk(
-    os_cl: Arc<OpenSearch>,
-    request_bodies: Vec<Value>,
-    tracking_count: usize,
-    target_index: &str,
-    m_cl: Arc<PipelineMetrics>,
-    daemon_state: Arc<crate::grpc_server::DaemonState>,
-    labels: &[KeyValue],
-) -> Result<(), ()> {
-    let mut backoff = OS_WRITE_BACKOFF_INITIAL_SECS;
-    for _attempt in 1..=MAX_RETRIES {
-        let bodies_to_send: Vec<JsonBody<Value>> =
-            request_bodies.iter().cloned().map(JsonBody::from).collect();
-        if let Ok(Ok(response)) = tokio::time::timeout(
-            TIMEOUT_DURATION,
-            os_cl
-                .bulk(BulkParts::Index(target_index))
-                .body(bodies_to_send)
-                .send(),
-        )
-        .await
-            && response.status_code().is_success()
-        {
-            m_cl.records_sunk_success.add(tracking_count as u64, labels);
-            daemon_state
-                .records_sunk_success
-                .fetch_add(tracking_count as u64, Ordering::Relaxed);
-            return Ok(());
-        }
-        sleep(Duration::from_secs(backoff)).await;
-        backoff = std::cmp::min(backoff * 2, OS_WRITE_BACKOFF_MAX_SECS);
-    }
-    m_cl.records_sunk_failed.add(tracking_count as u64, labels);
-    daemon_state
-        .records_sunk_failed
-        .fetch_add(tracking_count as u64, Ordering::Relaxed);
-    Err(())
 }
