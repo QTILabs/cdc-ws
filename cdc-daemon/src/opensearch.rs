@@ -98,6 +98,9 @@ async fn submit_bulk(
                 daemon_state
                     .records_sunk_success
                     .fetch_add(tracking_count as u64, Ordering::Relaxed);
+                daemon_state
+                    .opensearch_success
+                    .fetch_add(tracking_count as u64, Ordering::Relaxed);
                 return Ok(());
             }
         }
@@ -111,6 +114,9 @@ async fn submit_bulk(
         .add(tracking_count as u64, labels);
     daemon_state
         .records_sunk_failed
+        .fetch_add(tracking_count as u64, Ordering::Relaxed);
+    daemon_state
+        .opensearch_failed
         .fetch_add(tracking_count as u64, Ordering::Relaxed);
     Err(())
 }

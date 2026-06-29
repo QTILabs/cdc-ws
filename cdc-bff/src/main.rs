@@ -40,6 +40,14 @@ struct MetricsResponseBody {
     records_sunk_success: u64,
     records_sunk_failed: u64,
     records_dlq: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sink_metrics: Option<HashMap<String, SinkMetricsBody>>,
+}
+
+#[derive(Serialize)]
+struct SinkMetricsBody {
+    sunk_success: u64,
+    sunk_failed: u64,
 }
 
 #[derive(Serialize)]
@@ -201,11 +209,27 @@ async fn get_metrics(
         .await
         .map(|r| {
             let response = r.into_inner();
+            let sink_metrics = if !response.sink_metrics.is_empty() {
+                let mut metrics = HashMap::new();
+                for (sink_type, sink_metric) in response.sink_metrics {
+                    metrics.insert(
+                        sink_type,
+                        SinkMetricsBody {
+                            sunk_success: sink_metric.sunk_success,
+                            sunk_failed: sink_metric.sunk_failed,
+                        },
+                    );
+                }
+                Some(metrics)
+            } else {
+                None
+            };
             Json(MetricsResponseBody {
                 records_ingested: response.records_ingested,
                 records_sunk_success: response.records_sunk_success,
                 records_sunk_failed: response.records_sunk_failed,
                 records_dlq: response.records_dlq,
+                sink_metrics,
             })
         })
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)

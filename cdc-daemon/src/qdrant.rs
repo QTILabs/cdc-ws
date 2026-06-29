@@ -194,6 +194,9 @@ async fn submit_qdrant_upsert(
             state
                 .records_sunk_success
                 .fetch_add(count as u64, Ordering::Relaxed);
+            state
+                .qdrant_success
+                .fetch_add(count as u64, Ordering::Relaxed);
             Ok(())
         }
         Ok(Err(e)) => {
@@ -202,6 +205,9 @@ async fn submit_qdrant_upsert(
             state
                 .records_sunk_failed
                 .fetch_add(count as u64, Ordering::Relaxed);
+            state
+                .qdrant_failed
+                .fetch_add(count as u64, Ordering::Relaxed);
             Err(())
         }
         Err(_) => {
@@ -209,6 +215,9 @@ async fn submit_qdrant_upsert(
             metrics.records_sunk_failed.add(count as u64, labels);
             state
                 .records_sunk_failed
+                .fetch_add(count as u64, Ordering::Relaxed);
+            state
+                .qdrant_failed
                 .fetch_add(count as u64, Ordering::Relaxed);
             Err(())
         }
@@ -234,6 +243,9 @@ async fn submit_qdrant_delete(
             state
                 .records_sunk_success
                 .fetch_add(count as u64, Ordering::Relaxed);
+            state
+                .qdrant_success
+                .fetch_add(count as u64, Ordering::Relaxed);
             Ok(())
         }
         Ok(Err(e)) => {
@@ -242,6 +254,9 @@ async fn submit_qdrant_delete(
             state
                 .records_sunk_failed
                 .fetch_add(count as u64, Ordering::Relaxed);
+            state
+                .qdrant_failed
+                .fetch_add(count as u64, Ordering::Relaxed);
             Err(())
         }
         Err(_) => {
@@ -249,6 +264,9 @@ async fn submit_qdrant_delete(
             metrics.records_sunk_failed.add(count as u64, labels);
             state
                 .records_sunk_failed
+                .fetch_add(count as u64, Ordering::Relaxed);
+            state
+                .qdrant_failed
                 .fetch_add(count as u64, Ordering::Relaxed);
             Err(())
         }

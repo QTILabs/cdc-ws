@@ -23,6 +23,10 @@ pub struct DaemonState {
     pub records_sunk_success: AtomicU64,
     pub records_sunk_failed: AtomicU64,
     pub records_dlq: AtomicU64,
+    pub opensearch_success: AtomicU64,
+    pub opensearch_failed: AtomicU64,
+    pub qdrant_success: AtomicU64,
+    pub qdrant_failed: AtomicU64,
     pub pipelines: RwLock<HashMap<String, PipelineRuntime>>,
 }
 
@@ -50,6 +54,10 @@ impl DaemonState {
             records_sunk_success: AtomicU64::new(0),
             records_sunk_failed: AtomicU64::new(0),
             records_dlq: AtomicU64::new(0),
+            opensearch_success: AtomicU64::new(0),
+            opensearch_failed: AtomicU64::new(0),
+            qdrant_success: AtomicU64::new(0),
+            qdrant_failed: AtomicU64::new(0),
             pipelines: RwLock::new(HashMap::new()),
         }
     }
@@ -92,11 +100,28 @@ impl CdcManagement for CdcGrpcService {
         &self,
         _req: Request<MetricsRequest>,
     ) -> Result<Response<MetricsResponse>, Status> {
+        let mut sink_metrics = HashMap::new();
+        sink_metrics.insert(
+            "opensearch".to_string(),
+            cdc_daemon_proto::SinkMetrics {
+                sunk_success: self.state.opensearch_success.load(Ordering::Relaxed),
+                sunk_failed: self.state.opensearch_failed.load(Ordering::Relaxed),
+            },
+        );
+        sink_metrics.insert(
+            "qdrant".to_string(),
+            cdc_daemon_proto::SinkMetrics {
+                sunk_success: self.state.qdrant_success.load(Ordering::Relaxed),
+                sunk_failed: self.state.qdrant_failed.load(Ordering::Relaxed),
+            },
+        );
+
         Ok(Response::new(MetricsResponse {
             records_ingested: self.state.records_ingested.load(Ordering::Relaxed),
             records_sunk_success: self.state.records_sunk_success.load(Ordering::Relaxed),
             records_sunk_failed: self.state.records_sunk_failed.load(Ordering::Relaxed),
             records_dlq: self.state.records_dlq.load(Ordering::Relaxed),
+            sink_metrics,
         }))
     }
 

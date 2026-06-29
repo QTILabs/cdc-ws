@@ -26,6 +26,12 @@ message MetricsResponse {
   uint64 records_sunk_success = 2;
   uint64 records_sunk_failed = 3;
   uint64 records_dlq = 4;
+  map<string, SinkMetrics> sink_metrics = 5;
+}
+
+message SinkMetrics {
+  uint64 sunk_success = 1;
+  uint64 sunk_failed = 2;
 }
 
 message ListPipelinesRequest {}
