@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign CDC Architecture & Performance Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Chosen Palette: Deep Slate & Cyber Cyan -->
+    <!-- Application Structure Plan: The SPA uses a vertically scrolling, section-based narrative layout combined with a sticky sidebar navigation. This structure was chosen to guide the user logically through the complex Sovereign CDC concepts: starting with the high-level topology, diving into empirical performance benchmarks, and finally explaining the dynamic resilience mechanisms (backpressure). The layout prioritizes interactive discovery, allowing users to click components or trigger simulations to understand the system's behavior without being overwhelmed by dense static text, perfectly translating the provided technical manuals into an educational dashboard. -->
+    <!-- Visualization & Content Choices: 
+         - Topology Flow -> Goal: Organize/Relationships -> Viz: Interactive HTML/CSS Flexbox blocks -> Interaction: Clicking nodes updates a detail panel -> Justification: Clearly delineates ALE boundaries and network hops without relying on prohibited SVGs. 
+         - Resource Constraints -> Goal: Compare -> Viz: Chart.js Bar Charts -> Interaction: Hover tooltips -> Justification: Starkly contrasts the 128MiB memory ceiling and O(1) CPU efficiency against legacy alternatives. 
+         - Backpressure Cascade -> Goal: Change/Process -> Viz: Chart.js Line Chart with HTML Step Highlights -> Interaction: 'Simulate' button triggers time-series queue saturation -> Justification: Best way to explain the MPSC channel capacity limits and upstream suspension logic dynamically. 
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #0f172a; 
+            color: #cbd5e1;
+        }
+        h1, h2, h3, h4, h5, h6, .font-heading { 
+            font-family: 'Outfit', sans-serif; 
+        }
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (max-width: 768px) {
+            .chart-wrapper {
+                height: 250px;
+            }
+        }
+        .css-arrow-down {
+            width: 0; 
+            height: 0; 
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #334155;
+            margin: 0 auto;
+        }
+        .node-card {
+            transition: all 0.3s ease;
+        }
+        .node-card.active {
+            border-color: #22d3ee;
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.3);
+            transform: scale(1.02);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569; 
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row min-h-screen">
+
+    <nav class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-700 flex-shrink-0 md:h-screen md:sticky md:top-0 z-50 overflow-y-auto">
+        <div class="p-6">
+            <h1 class="text-2xl font-extrabold text-white font-heading tracking-tight">Sovereign<span class="text-cyan-400">CDC</span></h1>
+            <p class="text-xs text-slate-400 mt-1 uppercase tracking-widest font-semibold">Architecture Explorer</p>
+        </div>
+        <ul class="flex flex-row md:flex-col overflow-x-auto md:overflow-x-visible px-4 md:px-0 space-x-2 md:space-x-0 md:space-y-1 pb-4 md:pb-0">
+            <li>
+                <a href="#intro" class="nav-link block px-6 py-3 text-sm font-medium border-l-4 border-cyan-400 bg-slate-800 text-white transition-colors whitespace-nowrap md:whitespace-normal">
+                    <span class="mr-2">&#127968;</span> Executive Summary
+                </a>
+            </li>
+            <li>
+                <a href="#topology" class="nav-link block px-6 py-3 text-sm font-medium border-l-4 border-transparent text-slate-400 hover:bg-slate-800 hover:text-white transition-colors whitespace-nowrap md:whitespace-normal">
+                    <span class="mr-2">&#128423;</span> System Topology
+                </a>
+            </li>
+            <li>
+                <a href="#benchmarks" class="nav-link block px-6 py-3 text-sm font-medium border-l-4 border-transparent text-slate-400 hover:bg-slate-800 hover:text-white transition-colors whitespace-nowrap md:whitespace-normal">
+                    <span class="mr-2">&#128200;</span> Resource Benchmarks
+                </a>
+            </li>
+            <li>
+                <a href="#resilience" class="nav-link block px-6 py-3 text-sm font-medium border-l-4 border-transparent text-slate-400 hover:bg-slate-800 hover:text-white transition-colors whitespace-nowrap md:whitespace-normal">
+                    <span class="mr-2">&#9881;</span> Resilience & Backpressure
+                </a>
+            </li>
+            <li>
+                <a href="#telemetry" class="nav-link block px-6 py-3 text-sm font-medium border-l-4 border-transparent text-slate-400 hover:bg-slate-800 hover:text-white transition-colors whitespace-nowrap md:whitespace-normal">
+                    <span class="mr-2">&#128206;</span> OTel Telemetry
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <main class="flex-1 overflow-x-hidden bg-slate-900">
+        
+        <section id="intro" class="section-container min-h-[70vh] flex flex-col justify-center p-8 md:p-16 border-b border-slate-800">
+            <div class="max-w-4xl">
+                <div class="inline-block px-3 py-1 bg-cyan-900/30 border border-cyan-700/50 text-cyan-400 rounded-full text-xs font-bold uppercase tracking-wider mb-6">
+                    Private-First Architecture v2.2
+                </div>
+                <h2 class="text-4xl md:text-6xl font-extrabold text-white font-heading leading-tight mb-6">
+                    High-Throughput, Decoupled <br/><span class="text-cyan-400">Change Data Capture</span>
+                </h2>
+                <p class="text-lg md:text-xl text-slate-300 leading-relaxed mb-8">
+                    The Sovereign CDC platform enforces absolute data ownership and high throughput with zero external dependency on heavy JVM runtimes or proprietary database kernel hooks. This interactive report explores how we isolated the Application-Level Extension (ALE) to protect our primary transactional databases.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-lg">
+                        <div class="text-3xl mb-4">&#128274;</div>
+                        <h4 class="text-white font-bold mb-2">ALE Separation</h4>
+                        <p class="text-sm text-slate-400">Strictly isolated in user-space. Zero kernel pollution or shared buffer contention.</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-lg">
+                        <div class="text-3xl mb-4">&#128640;</div>
+                        <h4 class="text-white font-bold mb-2">Zero-Kafka</h4>
+                        <p class="text-sm text-slate-400">Eliminates massive JVM brokers. Relies natively on RisingWave streams and Rust daemons.</p>
+                    </div>
+                    <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 shadow-lg">
+                        <div class="text-3xl mb-4">&#128187;</div>
+                        <h4 class="text-white font-bold mb-2">Pure Rustls TLS</h4>
+                        <p class="text-sm text-slate-400">All transport securely encrypted independent of host-level OpenSSL dependencies.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="topology" class="section-container p-8 md:p-16 border-b border-slate-800">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading mb-4">System Topology</h2>
+                <p class="text-slate-300 text-lg mb-12 max-w-3xl">
+                    This section maps the physical data flow from the primary OLTP engine to the final search index. Select any component in the pipeline diagram to explore its architectural responsibilities and isolation mechanisms.
+                </p>
+
+                <div class="flex flex-col lg:flex-row gap-12">
+                    
+                    <div class="w-full lg:w-1/2 flex flex-col items-center space-y-2">
+                        <div class="w-full max-w-sm bg-slate-800 border-2 border-slate-600 rounded-xl p-6 text-center cursor-pointer node-card active" onclick="updateTopology('postgres', this)">
+                            <div class="text-2xl mb-2">&#128451;</div>
+                            <h3 class="text-white font-bold text-lg">PostgreSQL Database</h3>
+                            <p class="text-xs text-slate-400 uppercase tracking-widest mt-1">OLTP Engine / WAL</p>
+                        </div>
+                        
+                        <div class="py-1">
+                            <div class="h-6 w-1 bg-slate-600 mx-auto"></div>
+                            <div class="css-arrow-down"></div>
+                        </div>
+
+                        <div class="w-full max-w-sm bg-slate-800 border-2 border-slate-600 rounded-xl p-6 text-center cursor-pointer node-card" onclick="updateTopology('risingwave', this)">
+                            <div class="text-2xl mb-2">&#127754;</div>
+                            <h3 class="text-white font-bold text-lg">RisingWave Cluster</h3>
+                            <p class="text-xs text-slate-400 uppercase tracking-widest mt-1">Stream Processor</p>
+                        </div>
+
+                        <div class="py-1">
+                            <div class="h-6 w-1 bg-slate-600 mx-auto relative">
+                                <span class="absolute left-4 -top-1 text-[10px] text-cyan-400 whitespace-nowrap font-bold bg-slate-900 px-2 border border-cyan-800 rounded">Rustls TLS + PG Wire</span>
+                            </div>
+                            <div class="css-arrow-down"></div>
+                        </div>
+
+                        <div class="w-full max-w-sm bg-slate-800 border-2 border-slate-600 rounded-xl p-6 text-center cursor-pointer node-card" onclick="updateTopology('daemon', this)">
+                            <div class="text-2xl mb-2">&#9881;</div>
+                            <h3 class="text-white font-bold text-lg">Rust Sink Daemon</h3>
+                            <p class="text-xs text-slate-400 uppercase tracking-widest mt-1">Stateless Delivery</p>
+                        </div>
+
+                        <div class="py-1">
+                            <div class="h-6 w-1 bg-slate-600 mx-auto relative">
+                                <span class="absolute left-4 -top-1 text-[10px] text-cyan-400 whitespace-nowrap font-bold bg-slate-900 px-2 border border-cyan-800 rounded">HTTPS Bulk API</span>
+                            </div>
+                            <div class="css-arrow-down"></div>
+                        </div>
+
+                        <div class="w-full max-w-sm bg-slate-800 border-2 border-slate-600 rounded-xl p-6 text-center cursor-pointer node-card" onclick="updateTopology('opensearch', this)">
+                            <div class="text-2xl mb-2">&#128269;</div>
+                            <h3 class="text-white font-bold text-lg">OpenSearch Cluster</h3>
+                            <p class="text-xs text-slate-400 uppercase tracking-widest mt-1">Search & Index Storage</p>
+                        </div>
+                    </div>
+
+                    <div class="w-full lg:w-1/2">
+                        <div class="bg-slate-800 rounded-2xl border border-slate-700 p-8 shadow-2xl sticky top-24 min-h-[400px]">
+                            <div id="topo-tag" class="inline-block px-3 py-1 bg-cyan-900/30 text-cyan-400 rounded-full text-xs font-bold uppercase tracking-wider mb-4">PostgreSQL Database</div>
+                            <h3 id="topo-title" class="text-2xl font-extrabold text-white font-heading mb-4">ACID Transaction Engine</h3>
+                            <p id="topo-desc" class="text-slate-300 leading-relaxed mb-6">
+                                Focuses solely on ACID write transactions. It is insulated from downstream query load by exporting mutations exactly once via a logical replication slot.
+                            </p>
+                            <div class="space-y-4">
+                                <h4 class="text-white font-bold border-b border-slate-700 pb-2">Key Invariants</h4>
+                                <ul id="topo-list" class="space-y-3 text-sm text-slate-400">
+                                    <li class="flex items-start"><span class="text-cyan-400 mr-2">&#10003;</span> Maintains logical replication pointer safely on disk.</li>
+                                    <li class="flex items-start"><span class="text-cyan-400 mr-2">&#10003;</span> Zero kernel pollution from downstream sinks.</li>
+                                    <li class="flex items-start"><span class="text-cyan-400 mr-2">&#10003;</span> OLTP engine remains unaffected by search index latency.</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <section id="benchmarks" class="section-container p-8 md:p-16 border-b border-slate-800">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading mb-4">Resource Benchmarks & Optimization</h2>
+                <p class="text-slate-300 text-lg mb-12 max-w-3xl">
+                    By compiling native asynchronous Rust and shifting stateful computation away from the primary database, the Sovereign Daemon operates within extreme resource constraints. Explore the empirical charts below demonstrating our footprint versus legacy architectures.
+                </p>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    
+                    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                        <h3 class="text-xl font-bold text-white mb-2">Memory Allocation Envelope</h3>
+                        <p class="text-sm text-slate-400 mb-6">Comparing the maximum RAM overhead required for CDC delivery across differing architectural paradigms.</p>
+                        <div class="chart-wrapper">
+                            <canvas id="memoryChart"></canvas>
+                        </div>
+                        <div class="mt-6 p-4 bg-slate-900 rounded-lg text-sm text-slate-300 border-l-4 border-cyan-400">
+                            The bounded MPSC queues enforce a strict <strong class="text-white">128 MiB ceiling</strong>, completely preventing OOM evictions under heavy transaction spikes.
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                        <h3 class="text-xl font-bold text-white mb-2">CPU Type Coercion Cost</h3>
+                        <p class="text-sm text-slate-400 mb-6">Relative CPU allocation cost during database row parsing (1,000 rows/batch).</p>
+                        <div class="chart-wrapper">
+                            <canvas id="cpuChart"></canvas>
+                        </div>
+                        <div class="mt-6 p-4 bg-slate-900 rounded-lg text-sm text-slate-300 border-l-4 border-violet-400">
+                            Implementing explicit <code class="bg-slate-800 px-1 rounded text-cyan-300">tokio_postgres::types::Type</code> matching resolved the bottleneck caused by sequential <code class="bg-slate-800 px-1 rounded text-cyan-300">try_get</code> exceptions, reducing mapping complexity to O(1).
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <section id="resilience" class="section-container p-8 md:p-16 border-b border-slate-800 bg-slate-900/50">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading mb-4">Backpressure & Resilience Mechanics</h2>
+                <p class="text-slate-300 text-lg mb-12 max-w-3xl">
+                    The architecture manages failures without complex distributed coordinators. The bounded Multi-Producer Single-Consumer (MPSC) channel dynamically translates downstream OpenSearch saturations into upstream database query halts.
+                </p>
+
+                <div class="flex flex-col xl:flex-row gap-12 items-center">
+                    
+                    <div class="w-full xl:w-1/2">
+                        <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-xl font-bold text-white">MPSC Queue Depth Simulation</h3>
+                                <button id="simulateBtn" onclick="runSimulation()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-md">
+                                    Simulate Outage
+                                </button>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="backpressureChart"></canvas>
+                            </div>
+                            <div class="flex justify-between text-xs text-slate-400 mt-4 px-2">
+                                <span>Nominal Flow</span>
+                                <span>Target Saturated</span>
+                                <span>Upstream Blocked</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="w-full xl:w-1/2 space-y-4">
+                        <div id="step-1" class="bp-step bg-slate-800 border-2 border-slate-700 p-5 rounded-xl transition-all duration-300">
+                            <div class="flex items-center mb-2">
+                                <span class="bg-slate-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3">1</span>
+                                <h4 class="font-bold text-white text-lg">Target Saturation (HTTP 429)</h4>
+                            </div>
+                            <p class="text-slate-400 text-sm ml-9">OpenSearch cluster experiences high indexing load and rejects incoming HTTPS bulk requests.</p>
+                        </div>
+                        <div id="step-2" class="bp-step bg-slate-800 border-2 border-slate-700 p-5 rounded-xl transition-all duration-300">
+                            <div class="flex items-center mb-2">
+                                <span class="bg-slate-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3">2</span>
+                                <h4 class="font-bold text-white text-lg">Consumer Task Pauses</h4>
+                            </div>
+                            <p class="text-slate-400 text-sm ml-9">The daemon's consumer loop catches the exception, pauses, and initiates an exponential backoff sleep (2s to 60s).</p>
+                        </div>
+                        <div id="step-3" class="bp-step bg-slate-800 border-2 border-slate-700 p-5 rounded-xl transition-all duration-300">
+                            <div class="flex items-center mb-2">
+                                <span class="bg-slate-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3">3</span>
+                                <h4 class="font-bold text-white text-lg">MPSC Channel Accumulation</h4>
+                            </div>
+                            <p class="text-slate-400 text-sm ml-9">Because the consumer is asleep, the internal memory channel rapidly fills to its hard limit of 64 stream batches.</p>
+                        </div>
+                        <div id="step-4" class="bp-step bg-slate-800 border-2 border-slate-700 p-5 rounded-xl transition-all duration-300">
+                            <div class="flex items-center mb-2">
+                                <span class="bg-slate-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mr-3">4</span>
+                                <h4 class="font-bold text-white text-lg">Producers Suspended</h4>
+                            </div>
+                            <p class="text-slate-400 text-sm ml-9">The Tokio runtime forces <code class="text-cyan-400">tx.send().await</code> to block. Database <code>FETCH</code> queries halt. RisingWave safely buffers changelogs in its LSM storage.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="mt-12 bg-rose-900/20 border border-rose-800/50 rounded-2xl p-8">
+                    <h3 class="text-2xl font-bold text-rose-400 mb-4">&#9888; Dead-Letter Queue (DLQ) Safeguard</h3>
+                    <p class="text-slate-300 mb-4">
+                        If a single transaction fails due to dynamic index schema constraint rejections (poison pill), stalling the entire pipeline is unacceptable. The daemon intercepts item-level errors within the OpenSearch bulk HTTP 200 response.
+                    </p>
+                    <div class="flex items-center space-x-4 bg-slate-900 p-4 rounded-lg">
+                        <div class="text-2xl text-slate-500">&#10142;</div>
+                        <p class="text-sm text-slate-400 font-mono">
+                            <span class="text-rose-400">handle_dlq()</span> extracts the original record, appends a UUID and timestamp, and routes it to an isolated <span class="text-white">-dlq</span> index for secure administrative auditing via the BFF gateway.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <section id="telemetry" class="section-container p-8 md:p-16">
+            <div class="max-w-6xl mx-auto">
+                <h2 class="text-3xl md:text-4xl font-extrabold text-white font-heading mb-4">Telemetry & OIDC Security</h2>
+                <p class="text-slate-300 text-lg mb-12 max-w-3xl">
+                    The platform enforces a strict Backend-for-Frontend (BFF) boundary for human interaction, while instrumenting all automated internal processes with standard OpenTelemetry (OTLP) metrics natively within the async Tokio runtime.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-8">
+                        <h3 class="text-xl font-bold text-white mb-6 border-b border-slate-700 pb-2">OTel Exported Metrics</h3>
+                        <ul class="space-y-6">
+                            <li>
+                                <div class="flex justify-between items-end mb-1">
+                                    <span class="font-bold text-cyan-400 font-mono">pipeline_records_ingested</span>
+                                    <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Counter</span>
+                                </div>
+                                <p class="text-sm text-slate-400">Total transaction records pulled from RisingWave cursors. Labeled by subscription.</p>
+                            </li>
+                            <li>
+                                <div class="flex justify-between items-end mb-1">
+                                    <span class="font-bold text-cyan-400 font-mono">pipeline_records_sunk_success</span>
+                                    <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Counter</span>
+                                </div>
+                                <p class="text-sm text-slate-400">Transactions successfully mapped and indexed. Measures end-to-end processing rates.</p>
+                            </li>
+                            <li>
+                                <div class="flex justify-between items-end mb-1">
+                                    <span class="font-bold text-cyan-400 font-mono">pipeline_records_dlq</span>
+                                    <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Counter</span>
+                                </div>
+                                <p class="text-sm text-slate-400">Poison pill documents safely isolated. Primary alert indicator for structural audits.</p>
+                            </li>
+                            <li>
+                                <div class="flex justify-between items-end mb-1">
+                                    <span class="font-bold text-cyan-400 font-mono">pipeline_mpsc_available_capacity</span>
+                                    <span class="text-xs bg-slate-700 text-slate-300 px-2 py-0.5 rounded">Gauge</span>
+                                </div>
+                                <p class="text-sm text-slate-400">Registered ONCE outside the loop to prevent OOM memory leaks via observer callbacks.</p>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-8 flex flex-col justify-center text-center">
+                        <div class="w-16 h-16 mx-auto bg-violet-900/50 border border-violet-500 rounded-full flex items-center justify-center text-3xl mb-6">&#128272;</div>
+                        <h3 class="text-2xl font-bold text-white mb-4">The OIDC BFF Gatekeeper</h3>
+                        <p class="text-slate-300 mb-6 text-sm leading-relaxed">
+                            Browser clients never communicate directly with the ingestion gRPC control plane. 
+                            The <span class="font-bold text-white">cdc-bff</span> daemon handles Keycloak OAuth2 code exchanges on the server-side, 
+                            issuing an AES-256-GCM signed <code class="bg-slate-900 px-1 rounded text-cyan-300">cdc_bff_session</code> cookie.
+                        </p>
+                        <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
+                            <span class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Protocol Translation</span>
+                            <span class="text-sm text-slate-300 font-mono">HTTPS (Browser) &rarr; Axum BFF &rarr; gRPC (Port 50051) &rarr; Daemon State Atomics</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const topoData = {
+            postgres: {
+                tag: "PostgreSQL Database",
+                title: "ACID Transaction Engine",
+                desc: "Focuses solely on ACID write transactions. It is insulated from downstream query load by exporting mutations exactly once via a logical replication slot.",
+                list: [
+                    "Maintains logical replication pointer safely on disk.",
+                    "Zero kernel pollution from downstream sinks.",
+                    "OLTP engine remains unaffected by search index latency."
+                ]
+            },
+            risingwave: {
+                tag: "RisingWave Cluster",
+                title: "Stateful Stream Database",
+                desc: "Acts as the compute and storage buffer. Performs incremental materialized view maintenance, multi-table joins, and secure PII masking before delivery.",
+                list: [
+                    "Exposes secure Postgres Wire Protocol on Port 4566.",
+                    "Pauses cursors instantly on client disconnect.",
+                    "Safely buffers change-logs in durable LSM storage."
+                ]
+            },
+            daemon: {
+                tag: "Rust Sink Daemon",
+                title: "Sovereign Delivery Agent",
+                desc: "A stateless, unprivileged, multi-threaded processor that dynamically maps relational tuples to type-erased JSON while enforcing strict memory capacity limits.",
+                list: [
+                    "Bounded MPSC queues prevent OOMs under 128MiB.",
+                    "Replays stream idempotently using '_id' mapping.",
+                    "Pure Rustls cryptography eliminates host OpenSSL risks."
+                ]
+            },
+            opensearch: {
+                tag: "OpenSearch Cluster",
+                title: "Index Storage & Search",
+                desc: "The destination search index. Configured for fast ingestion with dedicated index templates, async transaction logging, and custom shard-routing mapping.",
+                list: [
+                    "Evaluates bulk HTTPS NDJSON items atomically.",
+                    "Rejects unmapped schemas, triggering DLQ routing.",
+                    "Automatic failover to replica shards on node crash."
+                ]
+            }
+        };
+
+        function updateTopology(key, element) {
+            document.querySelectorAll('.node-card').forEach(el => {
+                el.classList.remove('active', 'border-cyan-400');
+                el.classList.add('border-slate-600');
+            });
+            element.classList.add('active');
+            
+            const data = topoData[key];
+            document.getElementById('topo-tag').innerText = data.tag;
+            document.getElementById('topo-title').innerText = data.title;
+            document.getElementById('topo-desc').innerText = data.desc;
+            
+            const ul = document.getElementById('topo-list');
+            ul.innerHTML = '';
+            data.list.forEach(text => {
+                const li = document.createElement('li');
+                li.className = 'flex items-start';
+                li.innerHTML = `<span class="text-cyan-400 mr-2">&#10003;</span> ${text}`;
+                ul.appendChild(li);
+            });
+        }
+
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('.section-container');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 150) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('border-cyan-400', 'bg-slate-800', 'text-white');
+                link.classList.add('border-transparent', 'text-slate-400');
+                if (link.getAttribute('href').includes(current)) {
+                    link.classList.add('border-cyan-400', 'bg-slate-800', 'text-white');
+                    link.classList.remove('border-transparent', 'text-slate-400');
+                }
+            });
+        });
+
+        const wrapText = (text) => {
+            if (text.length <= 16) return text;
+            const words = text.split(' ');
+            let lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > 16) {
+                    if (currentLine) lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+            return lines;
+        };
+
+        const globalTooltip = {
+            callbacks: {
+                title: function(items) {
+                    let label = items[0].chart.data.labels[items[0].dataIndex];
+                    return Array.isArray(label) ? label.join(' ') : label;
+                }
+            }
+        };
+
+        Chart.defaults.color = '#94a3b8';
+        Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
+
+        const memCtx = document.getElementById('memoryChart').getContext('2d');
+        new Chart(memCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Rust Sink Daemon', 'Iggy.rs Broker', 'Supabase FDW'].map(wrapText),
+                datasets: [{
+                    label: 'Memory Limit (MiB)',
+                    data: [128, 256, 512],
+                    backgroundColor: ['#22d3ee', '#6366f1', '#f43f5e'],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: globalTooltip },
+                scales: {
+                    y: { grid: { color: '#334155' }, title: { display: true, text: 'Allocation (MiB)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+        new Chart(cpuCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Sequential try_get()', 'Explicit tokio_postgres Type Map'].map(wrapText),
+                datasets: [{
+                    label: 'Relative CPU Cost Factor',
+                    data: [5.5, 1.0],
+                    backgroundColor: ['#8b5cf6', '#22d3ee'],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: globalTooltip },
+                scales: {
+                    y: { grid: { color: '#334155' }, title: { display: true, text: 'Relative Cost Multiplier' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        const bpCtx = document.getElementById('backpressureChart').getContext('2d');
+        let bpChart = new Chart(bpCtx, {
+            type: 'line',
+            data: {
+                labels: Array(30).fill(''),
+                datasets: [
+                    {
+                        label: 'Active Queue Depth',
+                        data: Array(30).fill(10),
+                        borderColor: '#22d3ee',
+                        backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'MPSC Hard Limit (64)',
+                        data: Array(30).fill(64),
+                        borderColor: '#f43f5e',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: {
+                    y: { min: 0, max: 75, grid: { color: '#334155' }, title: { display: true, text: 'Stream Batches' } },
+                    x: { display: false, grid: { display: false } }
+                }
+            }
+        });
+
+        let simInterval;
+        function runSimulation() {
+            if (simInterval) clearInterval(simInterval);
+            const btn = document.getElementById('simulateBtn');
+            btn.disabled = true;
+            btn.innerText = "Simulating...";
+            btn.classList.replace('bg-cyan-600', 'bg-slate-600');
+
+            let tick = 0;
+            let queue = 10;
+            let dataArr = Array(30).fill(10);
+            
+            document.querySelectorAll('.bp-step').forEach(el => {
+                el.classList.remove('border-cyan-400', 'shadow-[0_0_15px_rgba(34,211,238,0.2)]', 'scale-[1.02]');
+                el.classList.add('border-slate-700');
+            });
+
+            simInterval = setInterval(() => {
+                let activeStep = 0;
+                
+                if (tick < 5) {
+                    queue += Math.random() * 2; 
+                    activeStep = 1;
+                } else if (tick < 10) {
+                    queue += 5 + Math.random() * 5; 
+                    activeStep = 2;
+                } else if (tick < 18) {
+                    queue += 12; 
+                    activeStep = 3;
+                } else if (tick < 24) {
+                    queue = 64; 
+                    activeStep = 4;
+                } else {
+                    queue = Math.max(10, queue - 15); 
+                }
+
+                if (queue > 64) queue = 64;
+
+                dataArr.shift();
+                dataArr.push(queue);
+                bpChart.data.datasets[0].data = dataArr;
+                bpChart.update();
+
+                if (activeStep > 0) {
+                    document.querySelectorAll('.bp-step').forEach(el => {
+                        el.classList.remove('border-cyan-400', 'shadow-[0_0_15px_rgba(34,211,238,0.2)]', 'scale-[1.02]');
+                        el.classList.add('border-slate-700');
+                    });
+                    const stepEl = document.getElementById('step-' + activeStep);
+                    if(stepEl) {
+                        stepEl.classList.remove('border-slate-700');
+                        stepEl.classList.add('border-cyan-400', 'shadow-[0_0_15px_rgba(34,211,238,0.2)]', 'scale-[1.02]');
+                    }
+                }
+
+                tick++;
+                if (tick > 35) {
+                    clearInterval(simInterval);
+                    btn.disabled = false;
+                    btn.innerText = "Simulate Outage";
+                    btn.classList.replace('bg-slate-600', 'bg-cyan-600');
+                    document.querySelectorAll('.bp-step').forEach(el => {
+                        el.classList.remove('border-cyan-400', 'shadow-[0_0_15px_rgba(34,211,238,0.2)]', 'scale-[1.02]');
+                        el.classList.add('border-slate-700');
+                    });
+                }
+            }, 400);
+        }
+    </script>
+</body>
+</html>

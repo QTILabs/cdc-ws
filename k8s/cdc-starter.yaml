@@ -1,0 +1,206 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cdc
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cdc-config
+  namespace: cdc
+data:
+  RW_HOST: "risingwave.default.svc.cluster.local"
+  RW_PORT: "4566"
+  RW_USER: "root"
+  RW_DBNAME: "dev"
+  OS_URL: "https://opensearch.default.svc.cluster.local:9200"
+  OS_USER: "admin"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.observability.svc.cluster.local:4317"
+  PIPELINES_FILE: "/app/config/pipelines.yaml"
+  CONSUMER_ID: "cdc-worker-1"
+  HOSTNAME: "cdc-worker-1"
+  LOCAL_DLQ_DIR: "/var/log/cdc-dlq"
+  CDC_DAEMON_GRPC_URL: "http://cdc-daemon.cdc.svc.cluster.local:50051"
+  KEYCLOAK_ISSUER: "https://keycloak.example.com/realms/cdc"
+  KEYCLOAK_REDIRECT_URL: "https://cdc.example.com/api/auth/oauth2/keycloak/callback"
+  pipelines.yaml: |
+    - subscription_name: public.customers_sub
+      target_index: customers
+      id_field: id
+      batch_size: 500
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cdc-secrets
+  namespace: cdc
+type: Opaque
+stringData:
+  OS_PASSWORD: "REPLACE_ME"
+  JWT_SECRET: "REPLACE_ME"
+  KEYCLOAK_CLIENT_ID: "cdc-bff"
+  KEYCLOAK_CLIENT_SECRET: "REPLACE_ME"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdc-daemon
+  namespace: cdc
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: cdc-daemon
+  template:
+    metadata:
+      labels:
+        app: cdc-daemon
+    spec:
+      containers:
+        - name: daemon
+          image: ghcr.io/your-org/cdc-daemon@sha256:REPLACE_WITH_DAEMON_DIGEST
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+          envFrom:
+            - configMapRef:
+                name: cdc-config
+            - secretRef:
+                name: cdc-secrets
+          volumeMounts:
+            - name: pipelines
+              mountPath: /app/config/pipelines.yaml
+              subPath: pipelines.yaml
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: pipelines
+          configMap:
+            name: cdc-config
+            items:
+              - key: pipelines.yaml
+                path: pipelines.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdc-bff
+  namespace: cdc
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: cdc-bff
+  template:
+    metadata:
+      labels:
+        app: cdc-bff
+    spec:
+      containers:
+        - name: bff
+          image: ghcr.io/your-org/cdc-bff@sha256:REPLACE_WITH_BFF_DIGEST
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: cdc-config
+            - secretRef:
+                name: cdc-secrets
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cdc-daemon
+  namespace: cdc
+spec:
+  selector:
+    app: cdc-daemon
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cdc-bff
+  namespace: cdc
+spec:
+  selector:
+    app: cdc-bff
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cdc-daemon-pdb
+  namespace: cdc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cdc-daemon
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cdc-bff-pdb
+  namespace: cdc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cdc-bff

@@ -1,0 +1,4 @@
+- subscription_name: sub_users
+  target_index: users-idx
+  id_field: user_id
+  batch_size: 1000

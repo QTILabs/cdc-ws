@@ -1,0 +1,40 @@
+syntax = "proto3";
+package cdc_daemon;
+
+service CdcManagement {
+  rpc GetHealth (HealthRequest) returns (HealthResponse);
+  rpc GetMetrics (MetricsRequest) returns (MetricsResponse);
+  rpc ListPipelines (ListPipelinesRequest) returns (ListPipelinesResponse);
+  rpc PausePipeline (PipelineControlRequest) returns (PipelineControlResponse);
+  rpc ReloadPipelines (ReloadPipelinesRequest) returns (PipelineControlResponse);
+  rpc StopDaemon (StopDaemonRequest) returns (PipelineControlResponse);
+}
+
+message HealthRequest {}
+message HealthResponse {
+  bool is_healthy = 1;
+  string overall_status = 2;
+  map<string, string> components = 3;
+}
+
+message MetricsRequest {}
+message MetricsResponse {
+  uint64 records_ingested = 1;
+  uint64 records_sunk_success = 2;
+  uint64 records_sunk_failed = 3;
+  uint64 records_dlq = 4;
+}
+
+message ListPipelinesRequest {}
+message PipelineStatus {
+  string subscription_name = 1;
+  string target_index = 2;
+  string cursor_name = 3;
+  string state = 4;
+}
+message ListPipelinesResponse { repeated PipelineStatus pipelines = 1; }
+
+message PipelineControlRequest { string subscription_name = 1; }
+message ReloadPipelinesRequest {}
+message StopDaemonRequest {}
+message PipelineControlResponse { bool success = 1; string message = 2; }
