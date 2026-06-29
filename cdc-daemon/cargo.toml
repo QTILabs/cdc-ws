@@ -40,6 +40,7 @@ tracing-opentelemetry = "0.33.0"
 # Sink & gRPC
 opensearch = "2.4.0"
 tonic = "0.14.6"
+qdrant-client = "1.18.0"
 prost = "0.14.4"
 tonic-prost = "0.14.6"
 
