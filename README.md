@@ -1,6 +1,6 @@
 # CDC Workspace Documentation Index
 
-Use this page as the entry point for all project documentation.
+These code bases are generated using Github Copilot, Qwen 3.7-Plus and Gemini Flash 3.5-extended, with contributions from @allysandrana
 
 ## Canonical Docs (Primary)
 
