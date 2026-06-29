@@ -99,6 +99,25 @@ cd ../cdc-bff
 cargo run
 ```
 
+## Monitoring
+
+### Daemon Status
+
+Use `cdc-ctl status` to check daemon health and metrics:
+
+```bash
+# Basic status
+cargo run --bin cdc-ctl -- status
+
+# Detailed status (components + active pipelines)
+cargo run --bin cdc-ctl -- status --verbose
+
+# Remote daemon
+cargo run --bin cdc-ctl -- status --daemon-url http://remote-host:50051
+```
+
+Output includes overall health, record counts (ingested/sunk/failed/DLQ), and optionally pipeline details.
+
 4. Reload pipelines after config edits:
 
 ```bash
