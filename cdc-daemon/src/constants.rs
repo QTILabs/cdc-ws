@@ -17,7 +17,6 @@ pub const DEFAULT_RW_USER: &str = "root";
 pub const DEFAULT_RW_DBNAME: &str = "dev";
 pub const DEFAULT_OS_URL: &str = "https://localhost:9200";
 pub const DEFAULT_OS_USER: &str = "admin";
-pub const DEFAULT_QDRANT_URL: &str = "https://localhost:6334";
 pub const DEFAULT_PIPELINES_FILE: &str = "pipelines.yaml";
 pub const DEFAULT_HOSTNAME: &str = "local";
 pub const DEFAULT_DLQ_DIR: &str = "/var/log/cdc-dlq";

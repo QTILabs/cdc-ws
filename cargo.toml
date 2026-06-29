@@ -1,7 +1,3 @@
 [workspace]
-members = [
-  "cdc-daemon",
-  "cdc-ctl",
-  "cdc-bff",
-]
+members = ["cdc-daemon", "cdc-bff", "cdc-ctl"]
 resolver = "2"

@@ -1,7 +1,7 @@
 use crate::constants::{
     CONNECT_RETRY_SECS, DEFAULT_HOSTNAME, DEFAULT_OS_URL, DEFAULT_OS_USER, DEFAULT_OTLP_ENDPOINT,
-    DEFAULT_PIPELINES_FILE, DEFAULT_QDRANT_URL, DEFAULT_RW_DBNAME, DEFAULT_RW_HOST,
-    DEFAULT_RW_PORT, DEFAULT_RW_USER, EMPTY_FETCH_SLEEP_MS, TIMEOUT_DURATION,
+    DEFAULT_PIPELINES_FILE, DEFAULT_RW_DBNAME, DEFAULT_RW_HOST, DEFAULT_RW_PORT, DEFAULT_RW_USER,
+    EMPTY_FETCH_SLEEP_MS, TIMEOUT_DURATION,
 };
 use crate::error::{AppError, DaemonResult, StreamFetchError};
 use crate::grpc_server::DaemonState;
@@ -18,22 +18,18 @@ use tokio_postgres::types::Type;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug)]
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 pub struct PipelineConfig {
     pub subscription_name: String,
-    pub sink_type: String,           // "opensearch" or "qdrant"
-    pub target_collection: String,   // OpenSearch index or Qdrant collection
+    pub target_index: String,
     pub id_field: String,
     pub batch_size: usize,
-    pub vector_field: Option<String>, // Qdrant-specific: field containing the vector
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StreamBatch {
-    pub sink_type: String,
-    pub target_collection: String,
+    pub target_index: String,
     pub id_field: String,
-    pub vector_field: Option<String>,
     pub rows: Vec<Value>,
 }
 
@@ -42,9 +38,7 @@ pub struct RuntimeConfig {
     pub rw_conn_str: String,
     pub os_url: String,
     pub os_user: String,
-    pub os_password: Option<String>,
-    pub qdrant_url: String,
-    pub qdrant_api_key: Option<String>,
+    pub os_password: String,
     pub pipelines_path: String,
     pub hostname: String,
     pub consumer_id: String,
@@ -68,9 +62,7 @@ pub fn load_runtime_config() -> DaemonResult<RuntimeConfig> {
         ),
         os_url: env_or_default("OS_URL", DEFAULT_OS_URL),
         os_user: env_or_default("OS_USER", DEFAULT_OS_USER),
-        os_password: std::env::var("OS_PASSWORD").ok(),
-        qdrant_url: env_or_default("QDRANT_URL", DEFAULT_QDRANT_URL),
-        qdrant_api_key: std::env::var("QDRANT_API_KEY").ok(),
+        os_password: required_env("OS_PASSWORD")?,
         pipelines_path: env_or_default("PIPELINES_FILE", DEFAULT_PIPELINES_FILE),
         hostname,
         consumer_id,
@@ -117,7 +109,6 @@ pub async fn run_producer_loop(
         if cancel_token.is_cancelled() {
             break;
         }
-
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
         let tls_config = rustls::ClientConfig::builder()
@@ -134,7 +125,6 @@ pub async fn run_producer_loop(
             tokio::spawn(async move {
                 let _ = connection.await;
             });
-
             let _ = client
                 .execute(
                     &format!(
@@ -144,7 +134,6 @@ pub async fn run_producer_loop(
                     &[],
                 )
                 .await;
-
             let _ = run_stream_fetch_pipeline(
                 &client,
                 &config,
@@ -156,7 +145,6 @@ pub async fn run_producer_loop(
             )
             .await;
         }
-
         sleep(Duration::from_secs(CONNECT_RETRY_SECS)).await;
     }
 }
@@ -174,12 +162,10 @@ async fn run_stream_fetch_pipeline(
         "subscription",
         config.subscription_name.clone(),
     )];
-
     let query = format!(
         "FETCH {} FROM {} WITH (timeout = '5 second');",
         config.batch_size, cursor_name
     );
-
     let mut query_stream = {
         let cancel_token = cancel_token.clone();
         Box::pin(stream::unfold((client, &query), move |(cl, q)| {
@@ -188,14 +174,12 @@ async fn run_stream_fetch_pipeline(
                 if cancel_token.is_cancelled() {
                     return None;
                 }
-
                 let result: Result<Vec<tokio_postgres::Row>, StreamFetchError> =
                     match tokio::time::timeout(TIMEOUT_DURATION, cl.query(q, &[])).await {
                         Ok(Ok(rows)) => Ok(rows),
                         Ok(Err(e)) => Err(StreamFetchError::from(e)),
                         Err(_) => Err(StreamFetchError::Timeout),
                     };
-
                 Some((result, (cl, q)))
             }
         }))
@@ -218,10 +202,8 @@ async fn run_stream_fetch_pipeline(
             sleep(Duration::from_millis(EMPTY_FETCH_SLEEP_MS)).await;
             continue;
         }
-
         let row_count = rows.len();
         let mut batch_records = Vec::with_capacity(row_count);
-
         for row in rows {
             let mut json_obj = serde_json::Map::new();
             for (col_idx, column) in row.columns().iter().enumerate() {
@@ -232,18 +214,14 @@ async fn run_stream_fetch_pipeline(
             }
             batch_records.push(Value::Object(json_obj));
         }
-
         metrics.records_ingested.add(row_count as u64, &labels);
         daemon_state
             .records_ingested
             .fetch_add(row_count as u64, Ordering::Relaxed);
-
         if tx
             .send(StreamBatch {
-                sink_type: config.sink_type.clone(),
-                target_collection: config.target_collection.clone(),
+                target_index: config.target_index.clone(),
                 id_field: config.id_field.clone(),
-                vector_field: config.vector_field.clone(),
                 rows: batch_records,
             })
             .await
@@ -252,7 +230,6 @@ async fn run_stream_fetch_pipeline(
             break;
         }
     }
-
     Ok(())
 }
 
@@ -297,4 +274,8 @@ fn env_or_default(name: &'static str, default: &str) -> String {
         Ok(value) => value,
         Err(_) => default.to_string(),
     }
+}
+
+fn required_env(name: &'static str) -> DaemonResult<String> {
+    std::env::var(name).map_err(|_| AppError::MissingEnv(name))
 }

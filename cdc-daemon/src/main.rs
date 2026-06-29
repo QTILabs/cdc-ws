@@ -5,8 +5,6 @@ mod error;
 mod grpc_server;
 mod metrics;
 mod postgres;
-mod opensearch;
-mod qdrant;
 
 use crate::constants::{CHANNEL_CAPACITY, GRPC_SERVER_PORT};
 use crate::consumer::run_consumer_loop;
@@ -17,7 +15,7 @@ use crate::metrics::{TelemetryRuntime, initialize_telemetry};
 use crate::postgres::{
     PipelineConfig, StreamBatch, load_pipeline_configs, load_runtime_config, run_producer_loop,
 };
-use ::opensearch::{
+use opensearch::{
     OpenSearch,
     auth::Credentials,
     http::{
@@ -25,7 +23,6 @@ use ::opensearch::{
         transport::{SingleNodeConnectionPool, TransportBuilder},
     },
 };
-use qdrant_client::Qdrant;
 use std::sync::Arc;
 use tokio::sync::{mpsc::UnboundedReceiver, oneshot};
 use tokio::task::JoinSet;
@@ -34,15 +31,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 type SharedMetrics = Arc<crate::metrics::PipelineMetrics>;
-
-#[derive(Clone)]
-struct SinkRuntimeConfig {
-    os_url: String,
-    os_user: String,
-    os_password: Option<String>,
-    qdrant_url: String,
-    qdrant_api_key: Option<String>,
-}
 
 #[tokio::main]
 async fn main() -> DaemonResult<()> {
@@ -71,15 +59,11 @@ async fn main() -> DaemonResult<()> {
 
     let _dlq_directory = resolve_dlq_directory();
 
-    // 4. Shared sink configuration
+    // 4. Connections
     let rw_conn_str = Arc::<str>::from(runtime_config.rw_conn_str);
-    let sink_config = SinkRuntimeConfig {
-        os_url: runtime_config.os_url,
-        os_user: runtime_config.os_user,
-        os_password: runtime_config.os_password,
-        qdrant_url: runtime_config.qdrant_url,
-        qdrant_api_key: runtime_config.qdrant_api_key,
-    };
+    let os_password = runtime_config.os_password;
+    let url = Url::parse(&runtime_config.os_url)?;
+    let os_client = build_opensearch_client(url, runtime_config.os_user, os_password)?;
 
     // 5. Concurrency Primitives
     let shutdown_token = CancellationToken::new();
@@ -89,7 +73,6 @@ async fn main() -> DaemonResult<()> {
         info!("SIGINT received, shutting down...");
         cl_token.cancel();
     });
-
     let hostname = runtime_config.hostname;
     let consumer_id = Arc::<str>::from(runtime_config.consumer_id);
 
@@ -101,7 +84,7 @@ async fn main() -> DaemonResult<()> {
             consumer_id: Arc::clone(&consumer_id),
             metrics: Arc::clone(&metrics),
             daemon_state: Arc::clone(&daemon_state),
-            sink_config,
+            os_client: Arc::clone(&os_client),
             shutdown_token,
         },
         &mut control_rx,
@@ -125,7 +108,7 @@ struct PipelineManagerContext {
     consumer_id: Arc<str>,
     metrics: SharedMetrics,
     daemon_state: Arc<DaemonState>,
-    sink_config: SinkRuntimeConfig,
+    os_client: Arc<OpenSearch>,
     shutdown_token: CancellationToken,
 }
 
@@ -151,23 +134,22 @@ async fn run_pipeline_manager(
         consumer_id,
         metrics,
         daemon_state,
-        sink_config,
+        os_client,
         shutdown_token,
     } = context;
 
     let mut current_pipelines: Vec<PipelineConfig> =
         match load_pipeline_configs(&pipelines_path).await {
-            Ok(pipelines) => pipelines,
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    path = %pipelines_path,
-                    "failed to load pipeline configuration at startup; daemon will stay alive and wait for reload"
-                );
-                Vec::new()
-            }
-        };
-
+        Ok(pipelines) => pipelines,
+        Err(err) => {
+            warn!(
+                error = %err,
+                path = %pipelines_path,
+                "failed to load pipeline configuration at startup; daemon will stay alive and wait for reload"
+            );
+            Vec::new()
+        }
+    };
     let mut pending_reload_ack: Option<oneshot::Sender<Result<(), String>>> = None;
 
     loop {
@@ -220,7 +202,7 @@ async fn run_pipeline_manager(
             Arc::clone(&consumer_id),
             Arc::clone(&metrics),
             Arc::clone(&daemon_state),
-            &sink_config,
+            Arc::clone(&os_client),
         )
         .await?;
 
@@ -302,7 +284,7 @@ async fn start_pipeline_generation(
     consumer_id: Arc<str>,
     metrics: SharedMetrics,
     daemon_state: Arc<DaemonState>,
-    sink_config: &SinkRuntimeConfig,
+    os_client: Arc<OpenSearch>,
 ) -> DaemonResult<PipelineGeneration> {
     {
         let mut pipeline_map = daemon_state.pipelines.write().await;
@@ -313,38 +295,13 @@ async fn start_pipeline_generation(
     let mut join_set = JoinSet::new();
     let (tx, rx) = tokio::sync::mpsc::channel::<StreamBatch>(CHANNEL_CAPACITY);
 
-    let requires_opensearch = pipelines.iter().any(|config| config.sink_type == "opensearch");
-    let requires_qdrant = pipelines.iter().any(|config| config.sink_type == "qdrant");
-
-    let os_client = if requires_opensearch {
-        Some(build_opensearch_client(
-            &sink_config.os_url,
-            &sink_config.os_user,
-            sink_config.os_password.as_deref(),
-        )?)
-    } else {
-        None
-    };
-
-    let qdrant_client = if requires_qdrant {
-        Some(build_qdrant_client(
-            &sink_config.qdrant_url,
-            sink_config.qdrant_api_key.clone(),
-        )?)
-    } else {
-        None
-    };
-
     for config in pipelines {
         let PipelineConfig {
             subscription_name,
-            sink_type,
-            target_collection,
+            target_index,
             id_field,
             batch_size,
-            vector_field,
         } = config;
-
         let tx_clone = tx.clone();
         let conn_string = Arc::clone(&rw_conn_str);
         let m_handle = Arc::clone(&metrics);
@@ -358,7 +315,7 @@ async fn start_pipeline_generation(
             pipeline_name,
             PipelineRuntime {
                 config_subscription: subscription_name.clone(),
-                target_collection: target_collection.clone(),
+                target_index: target_index.clone(),
                 cursor_name,
                 state: String::from("RUNNING"),
                 cancel_token: p_cancel_token.clone(),
@@ -371,11 +328,9 @@ async fn start_pipeline_generation(
                 consumer_id,
                 PipelineConfig {
                     subscription_name,
-                    sink_type,
-                    target_collection,
+                    target_index,
                     id_field,
                     batch_size,
-                    vector_field,
                 },
                 tx_clone,
                 m_handle,
@@ -385,12 +340,11 @@ async fn start_pipeline_generation(
             .await;
         });
     }
-
     drop(tx);
 
     let rx_stream = ReceiverStream::new(rx);
     join_set.spawn(async move {
-        run_consumer_loop(rx_stream, os_client, qdrant_client, metrics, daemon_state).await;
+        run_consumer_loop(rx_stream, os_client, metrics, daemon_state).await;
     });
 
     Ok(PipelineGeneration {
@@ -400,31 +354,13 @@ async fn start_pipeline_generation(
 }
 
 fn build_opensearch_client(
-    url: &str,
-    os_user: &str,
-    os_password: Option<&str>,
+    url: Url,
+    os_user: String,
+    os_password: String,
 ) -> DaemonResult<Arc<OpenSearch>> {
-    let password = os_password.ok_or(error::AppError::MissingEnv("OS_PASSWORD"))?;
-    let url = Url::parse(url)?;
     let transport = TransportBuilder::new(SingleNodeConnectionPool::new(url))
-        .auth(Credentials::Basic(os_user.to_owned(), password.to_owned()))
+        .auth(Credentials::Basic(os_user, os_password))
         .build()
         .map_err(|err| error::AppError::OpenSearchTransportBuild(err.to_string()))?;
     Ok(Arc::new(OpenSearch::new(transport)))
-}
-
-fn build_qdrant_client(url: &str, api_key: Option<String>) -> DaemonResult<Arc<Qdrant>> {
-    let parsed_url = Url::parse(url).map_err(error::AppError::OpenSearchUrl)?;
-    if parsed_url.scheme() != "https" {
-        return Err(error::AppError::InsecureQdrantUrl(
-            parsed_url.scheme().to_string(),
-        ));
-    }
-
-    let qdrant_config = Qdrant::from_url(parsed_url.as_str())
-        .api_key(api_key)
-        .timeout(std::time::Duration::from_secs(10));
-    Ok(Arc::new(
-        Qdrant::new(qdrant_config).map_err(|err| error::AppError::QdrantInit(err.to_string()))?,
-    ))
 }

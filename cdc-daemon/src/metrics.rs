@@ -23,20 +23,16 @@ pub struct TelemetryRuntime {
 }
 
 pub fn initialize_telemetry(otlp_endpoint: &str) -> DaemonResult<TelemetryRuntime> {
-    // Initialize OpenTelemetry Tracing
     let span_exporter = SpanExporter::builder()
         .with_tonic()
         .with_endpoint(otlp_endpoint)
         .build()
         .map_err(|err| AppError::Telemetry(err.to_string()))?;
-
     let tracer_provider = SdkTracerProvider::builder()
         .with_batch_exporter(span_exporter)
         .build();
-
     let tracer = tracer_provider.tracer("rw_opensearch_sink");
 
-    // Initialize tracing subscriber with environment filter
     let env_filter = match EnvFilter::try_from_default_env() {
         Ok(filter) => filter,
         Err(_) => EnvFilter::new("info"),
@@ -48,19 +44,15 @@ pub fn initialize_telemetry(otlp_endpoint: &str) -> DaemonResult<TelemetryRuntim
         .with(OpenTelemetryLayer::new(tracer))
         .init();
 
-    // Initialize OpenTelemetry Metrics
     let metric_exporter = MetricExporter::builder()
         .with_tonic()
         .with_endpoint(otlp_endpoint)
         .build()
         .map_err(|err| AppError::Telemetry(err.to_string()))?;
-
     let meter_provider = SdkMeterProvider::builder()
         .with_periodic_exporter(metric_exporter)
         .build();
-
     global::set_meter_provider(meter_provider.clone());
-
     let meter = global::meter("rw_opensearch_sink");
 
     let metrics = Arc::new(PipelineMetrics {

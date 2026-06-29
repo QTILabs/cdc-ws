@@ -21,7 +21,6 @@ const DEFAULT_RW_USER: &str = "root";
 const DEFAULT_RW_DBNAME: &str = "dev";
 const DEFAULT_OS_URL: &str = "https://localhost:9200";
 const DEFAULT_OS_USER: &str = "admin";
-const DEFAULT_QDRANT_URL: &str = "https://localhost:6334";
 const DEFAULT_PIPELINES_FILE: &str = "pipelines.yaml";
 const DEFAULT_HOSTNAME: &str = "local";
 
@@ -75,14 +74,9 @@ enum Commands {
 #[derive(Deserialize, Serialize, Clone)]
 struct PipelineConfig {
     subscription_name: String,
-    #[serde(default = "default_sink_type")]
-    sink_type: String,
-    #[serde(alias = "target_index")]
-    target_collection: String,
+    target_index: String,
     id_field: String,
     batch_size: usize,
-    #[serde(default)]
-    vector_field: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -92,8 +86,6 @@ struct RuntimeConfigView {
     os_url: String,
     os_user: String,
     os_password: String,
-    qdrant_url: String,
-    qdrant_api_key: String,
     pipelines_path: String,
     hostname: String,
     consumer_id: String,
@@ -194,8 +186,6 @@ async fn print_config(env_file: String, pipelines_file: Option<String>) -> CliRe
         os_url: env_or_default("OS_URL", DEFAULT_OS_URL),
         os_user: env_or_default("OS_USER", DEFAULT_OS_USER),
         os_password: mask_secret_value(std::env::var("OS_PASSWORD").ok().as_deref()),
-        qdrant_url: env_or_default("QDRANT_URL", DEFAULT_QDRANT_URL),
-        qdrant_api_key: mask_secret_value(std::env::var("QDRANT_API_KEY").ok().as_deref()),
         pipelines_path: pipelines_path.clone(),
         hostname,
         consumer_id,
@@ -250,10 +240,6 @@ async fn load_pipeline_configs(path: &str) -> CliResult<Vec<PipelineConfig>> {
 
 fn env_or_default(name: &'static str, default: &str) -> String {
     std::env::var(name).unwrap_or_else(|_| default.to_string())
-}
-
-fn default_sink_type() -> String {
-    "opensearch".to_string()
 }
 
 fn mask_secret_value(value: Option<&str>) -> String {
