@@ -1,0 +1,52 @@
+[package]
+name = "cdc-daemon"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Async & Concurrency
+tokio = { version = "1.52.3", features = ["full"] }
+tokio-util = "0.7.18"
+tokio-stream = "0.1.18"
+futures-util = "0.3.32"
+
+# Database & TLS (rustls 0.23 requires explicit crypto provider)
+tokio-postgres = { version = "0.7.18", features = ["with-uuid-1", "with-serde_json-1"] }
+rustls = { version = "0.23.41", features = ["ring"] }
+tokio-rustls = "0.26"
+tokio-postgres-rustls = "0.14.0"
+webpki-roots = "1.0.8"
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serde_yaml = "0.9"
+toml = "1.1.2"
+anyhow = "1"
+uuid = { version = "1.23.3", features = ["v4", "v5"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+reqwest = { version = "0.12", features = ["json"] }
+rust_decimal = { version = "1.42.1", features = ["db-tokio-postgres"] }
+base64 = "0.22.1"
+thiserror = "2.0"
+url = "2.5"
+dotenvy = "0.15"
+
+# Telemetry (Modern 0.32+ API)
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
+opentelemetry = "0.32.0"
+opentelemetry_sdk = { version = "0.32.1", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.32.0", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.33.0"
+
+# Sink & gRPC
+opensearch = "2.4.0"
+qdrant-client = "1.12"
+tonic = "0.14.6"
+prost = "0.14.4"
+tonic-prost = "0.14.6"
+
+[build-dependencies]
+tonic-prost-build = "0.14.6"

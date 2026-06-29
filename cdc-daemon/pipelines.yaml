@@ -1,0 +1,14 @@
+# OpenSearch Pipeline
+- subscription_name: public.customers_sub
+  sink_type: opensearch
+  target_collection: customers_idx
+  id_field: id
+  batch_size: 1000
+
+# Qdrant Vector Pipeline
+- subscription_name: public.product_embeddings_sub
+  sink_type: qdrant
+  target_collection: products_vector_store
+  id_field: product_id
+  vector_field: embedding
+  batch_size: 256

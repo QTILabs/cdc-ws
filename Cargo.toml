@@ -1,0 +1,7 @@
+[workspace]
+members = [
+  "cdc-daemon",
+  "cdc-ctl",
+  "cdc-bff",
+]
+resolver = "2"
