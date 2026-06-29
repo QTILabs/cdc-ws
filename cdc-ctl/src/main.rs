@@ -11,7 +11,9 @@ pub mod cdc_daemon_proto {
 }
 
 use cdc_daemon_proto::cdc_management_client::CdcManagementClient;
-use cdc_daemon_proto::{ReloadPipelinesRequest, StopDaemonRequest};
+use cdc_daemon_proto::{
+    ReloadPipelinesRequest, StopDaemonRequest, HealthRequest, MetricsRequest, ListPipelinesRequest,
+};
 
 const DEFAULT_DAEMON_URL: &str = "http://localhost:50051";
 const DEFAULT_OTLP_ENDPOINT: &str = "http://localhost:4317";
@@ -64,6 +66,12 @@ enum Commands {
         #[arg(long, default_value = DEFAULT_DAEMON_URL)]
         daemon_url: String,
     },
+    Status {
+        #[arg(long, default_value = DEFAULT_DAEMON_URL)]
+        daemon_url: String,
+        #[arg(long, short)]
+        verbose: bool,
+    },
     PrintConfig {
         #[arg(long, default_value = ".env")]
         env_file: String,
@@ -109,6 +117,7 @@ async fn main() -> CliResult<()> {
         } => start(&daemon_bin, foreground),
         Commands::Reload { daemon_url } => reload(daemon_url).await,
         Commands::Stop { daemon_url } => stop(daemon_url).await,
+        Commands::Status { daemon_url, verbose } => status(daemon_url, verbose).await,
         Commands::PrintConfig {
             env_file,
             pipelines_file,
@@ -169,6 +178,68 @@ async fn stop(daemon_url: String) -> CliResult<()> {
         "stop: success={} message={}",
         response.success, response.message
     );
+    Ok(())
+}
+
+async fn status(daemon_url: String, verbose: bool) -> CliResult<()> {
+    let mut client = connect_client(&daemon_url).await?;
+
+    let health_response = client
+        .get_health(HealthRequest {})
+        .await?
+        .into_inner();
+
+    let metrics_response = client
+        .get_metrics(MetricsRequest {})
+        .await?
+        .into_inner();
+
+    println!("\n=== CDC Daemon Status ===");
+    println!("Overall Status: {}", health_response.overall_status);
+    println!("Healthy: {}", health_response.is_healthy);
+    println!("\n--- Metrics ---");
+    println!(
+        "Records Ingested:   {}",
+        format_number(metrics_response.records_ingested)
+    );
+    println!(
+        "Records Sunk:       {}",
+        format_number(metrics_response.records_sunk_success)
+    );
+    println!(
+        "Records Failed:     {}",
+        format_number(metrics_response.records_sunk_failed)
+    );
+    println!(
+        "Records DLQ:        {}",
+        format_number(metrics_response.records_dlq)
+    );
+
+    if verbose && !health_response.components.is_empty() {
+        println!("\n--- Pipeline Components ---");
+        for (name, state) in health_response.components.iter() {
+            println!("  {}: {}", name, state);
+        }
+    }
+
+    if verbose {
+        let pipelines_response = client
+            .list_pipelines(ListPipelinesRequest {})
+            .await?
+            .into_inner();
+
+        if !pipelines_response.pipelines.is_empty() {
+            println!("\n--- Active Pipelines ---");
+            for pipeline in pipelines_response.pipelines {
+                println!(
+                    "  {}: {} -> {} [{}]",
+                    pipeline.subscription_name, pipeline.cursor_name, pipeline.target_index, pipeline.state
+                );
+            }
+        }
+    }
+
+    println!();
     Ok(())
 }
 
@@ -310,5 +381,15 @@ fn value_to_string(value: &serde_json::Value) -> String {
     match value {
         serde_json::Value::String(s) => s.clone(),
         _ => value.to_string(),
+    }
+}
+
+fn format_number(n: u64) -> String {
+    if n >= 1_000_000 {
+        format!("{:.2}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.2}K", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
     }
 }

@@ -13,7 +13,29 @@ cargo check
 - `start` - launch daemon binary (foreground or background)
 - `reload` - trigger daemon pipeline reload
 - `stop` - request daemon shutdown
+- `status` - query daemon health and metrics
 - `print-config` - print masked runtime + parsed pipeline config
+
+## Status Command
+
+Displays daemon health, metrics, and optionally pipeline state.
+
+```bash
+# Basic status
+cdc-ctl status
+
+# Verbose mode (includes component health and active pipelines)
+cdc-ctl status --verbose
+
+# Custom daemon URL
+cdc-ctl status --daemon-url http://remote-host:50051
+```
+
+Output includes:
+- Overall health status (RUNNING, DEGRADED, etc.)
+- Record counts (ingested, successfully sunk, failed, DLQ)
+- Pipeline component states (verbose)
+- Active pipeline list with cursor position and state (verbose)
 
 ## Environment Variables
 
