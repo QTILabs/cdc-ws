@@ -29,8 +29,9 @@ export default function Login() {
   };
 
   return (
-    <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
+    <div class="min-h-screen flex items-center justify-center bg-linear-to-br from-slate-50 to-slate-100">
       <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+        <img src="/img/logo.png" class="mb-5" />
         <div class="text-center mb-8">
           <h1 class="text-2xl font-bold text-slate-900">CDC Console</h1>
           <p class="text-sm text-slate-500 mt-1">Sign in to manage your pipelines</p>
@@ -61,7 +62,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading()}
-            class="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg font-medium transition disabled:opacity-50"
+            class="w-full py-2.5 bg-primary hover:bg-button-primary-hover text-white cursor-pointer rounded-lg font-medium transition disabled:opacity-50"
           >
             {loading() ? "Signing in..." : "Sign in"}
           </button>

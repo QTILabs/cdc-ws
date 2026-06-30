@@ -35,15 +35,53 @@ export interface TokenResponse {
   user: string;
 }
 
+// async function fetchWithAuth<T>(
+//   endpoint: string,
+//   options: RequestInit = {}
+// ): Promise<T> {
+//   const token = localStorage.getItem("jwt_token");
+//   const headers: HeadersInit = {
+//     "Content-Type": "application/json",
+//     ...options.headers,
+//   };
+
+//   if (token) {
+//     headers.Authorization = `Bearer ${token}`;
+//   }
+
+//   const response = await fetch(`${API_BASE}${endpoint}`, {
+//     ...options,
+//     headers,
+//   });
+
+//   if (response.status === 401) {
+//     localStorage.removeItem("jwt_token");
+//     localStorage.removeItem("jwt_user");
+//     window.location.href = "/login";
+//     throw new Error("Unauthorized");
+//   }
+
+//   if (!response.ok) {
+//     throw new Error(`HTTP ${response.status}`);
+//   }
+
+//   return response.json();
+// }
 async function fetchWithAuth<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const token = localStorage.getItem("jwt_token");
-  const headers: HeadersInit = {
+
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...options.headers,
   };
+
+  if (options.headers) {
+    new Headers(options.headers).forEach((value, key) => {
+      headers[key] = value;
+    });
+  }
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
