@@ -456,7 +456,7 @@ Telemetry transport stays OpenTelemetry over OTLP, and metric naming remains ali
 
 This repository now uses three primary operational docs:
 
-1. [architecture_walkthrough.md](architecture_walkthrough.md) for architecture and enterprise controls
+1. [architecture-walkthrough.md](architecture-walkthrough.md) for architecture and enterprise controls
 2. [daemon-configuration.md](daemon-configuration.md) for runtime config, day-2 operations, and troubleshooting
-3. [image_generation_guide.md](image_generation_guide.md) for image build and delivery workflows
+3. [image-generation-guide.md](image-generation-guide.md) for image build and delivery workflows
 

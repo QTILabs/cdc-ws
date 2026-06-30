@@ -4,3 +4,9 @@ cdc-bff/target/
 cdc-ctl/target/
 **/*.code-workspace
 .env
+
+# Web console build/dependency artifacts
+cdc-web-console/node_modules/
+cdc-web-console/.vinxi/
+cdc-web-console/.output/
+cdc-web-console/.pnpm-store/
