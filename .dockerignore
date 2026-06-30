@@ -1,8 +1,28 @@
-target
-.git
-.github
-node_modules
-cdc-web-console/node_modules
-cdc-web-console/dist
-**/*.log
-**/.DS_Store
+# Docker build context — only exclude what we don't need
+
+# Build artifacts
+target/
+
+# Version control
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Large generated dirs (will be rebuilt anyway)
+cdc-web-console/node_modules/
+cdc-web-console/dist/
+cdc-web-console/build/
+
+# Temporary / cache
+**/.cache/
+**/.parcel-cache/
