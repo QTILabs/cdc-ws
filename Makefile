@@ -292,14 +292,91 @@ info: ## Info project
 # =============================================================================
 # 10) DOCKER
 # =============================================================================
-.PHONY: docker-build-daemon docker-build-bff docker-build-all
-docker-build-daemon: ## Build daemon Docker image
-	docker build -f $(CDC_ROOT)/docker/cdc-daemon.Dockerfile \
-		-t cdc-daemon:latest $(CDC_ROOT)
+# Build context  : project root (cdc-ws/)
+# Compose file   : docker-compose.yml
+# Images        : cdc-daemon, cdc-bff, cdc-web-console, cdc-ctl
+# Compose ports  : daemon :50051, bff :8080, fe :5174
+# =============================================================================
 
-docker-build-bff: ## Build BFF Docker image
-	docker build -f $(CDC_ROOT)/docker/cdc-bff.Dockerfile \
-		-t cdc-bff:latest $(CDC_ROOT)
+.PHONY: docker-build docker-build-daemon docker-build-bff docker-build-fe docker-build-ctl
 
-docker-build-all: docker-build-daemon docker-build-bff
-	@echo "✅ Docker images built"
+docker-build: ## Build semua Docker image
+	@echo "  Building cdc-daemon..."
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-daemon.Dockerfile -t cdc-daemon:latest $(CDC_ROOT)
+	@echo "  Building cdc-bff..."
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-bff.Dockerfile -t cdc-bff:latest $(CDC_ROOT)
+	@echo "  Building cdc-web-console..."
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-web-console.Dockerfile -t cdc-web-console:latest $(CDC_ROOT)
+	@echo "  Building cdc-ctl..."
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-ctl.Dockerfile -t cdc-ctl:latest $(CDC_ROOT)
+	@echo "✅ Semua image built"
+
+docker-build-daemon: ## Build cdc-daemon image
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-daemon.Dockerfile -t cdc-daemon:latest $(CDC_ROOT)
+
+docker-build-bff: ## Build cdc-bff image
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-bff.Dockerfile -t cdc-bff:latest $(CDC_ROOT)
+
+docker-build-fe: ## Build cdc-web-console image
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-web-console.Dockerfile -t cdc-web-console:latest $(CDC_ROOT)
+
+docker-build-ctl: ## Build cdc-ctl image
+	docker build --build-arg BUILDKIT_INLINE_CACHE=1 \
+		-f $(CDC_ROOT)/docker/cdc-ctl.Dockerfile -t cdc-ctl:latest $(CDC_ROOT)
+
+# ── Compose ───────────────────────────────────────────────────────────────────
+.PHONY: docker-up docker-up-build docker-down docker-logs docker-restart docker-ps
+
+docker-env-check:
+	@if [ ! -f $(CDC_ROOT)/.env ]; then \
+		echo "❌ .env tidak ditemukan. Copy dulu: cp .env.example .env"; \
+		exit 1; \
+	fi
+	@echo "  .env OK"
+
+docker-up: docker-env-check ## Start semua service via docker-compose (pakai image existing)
+	cd $(CDC_ROOT) && docker compose up -d
+	@echo ""
+	@echo "✅ Services up (docker):"
+	@echo "  BFF API  : http://localhost:8080"
+	@echo "  FE UI    : http://localhost:5174"
+	@echo "  Daemon   : localhost:50051 (gRPC)"
+	@echo "  Swagger  : http://localhost:8080/api/openapi.json"
+	@echo ""
+	@echo "  Login: admin / admin_password"
+
+docker-up-build: docker-env-check docker-build docker-up ## Build image dulu, lalu start
+
+docker-down: ## Stop & remove containers
+	cd $(CDC_ROOT) && docker compose down
+
+docker-logs: ## Tail log semua service
+	cd $(CDC_ROOT) && docker compose logs -f
+
+docker-logs-daemon: ## Tail daemon log
+	cd $(CDC_ROOT) && docker compose logs -f cdc-daemon
+
+docker-logs-bff: ## Tail BFF log
+	cd $(CDC_ROOT) && docker compose logs -f cdc-bff
+
+docker-logs-fe: ## Tail FE log
+	cd $(CDC_ROOT) && docker compose logs -f cdc-web-console
+
+docker-ps: ## Show running containers
+	cd $(CDC_ROOT) && docker compose ps
+
+docker-restart: docker-down docker-up ## Restart semua service
+
+# ── Push ───────────────────────────────────────────────────────────────────────
+.PHONY: docker-push
+docker-push: ## Push images (set IMAGE_REGISTRY=docker.io/username)
+	docker push $(IMAGE_REGISTRY)/cdc-daemon:latest
+	docker push $(IMAGE_REGISTRY)/cdc-bff:latest
+	docker push $(IMAGE_REGISTRY)/cdc-web-console:latest

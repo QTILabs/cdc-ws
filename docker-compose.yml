@@ -1,0 +1,85 @@
+# CDC Workspace — Docker Compose
+# =============================================================================
+# Usage:
+#   docker compose up -d          # Start semua service
+#   docker compose up -d cdc-bff  # Start satu service
+#   docker compose logs -f        # Lihat log
+#   docker compose down           # Stop semua
+#   docker compose build          # Build ulang
+#
+# Prasyarat:
+#   - Copy .env.example → .env   lalu isi OS_PASSWORD & IP sesuai env
+# =============================================================================
+
+services:
+
+  # ── CDC Daemon ──────────────────────────────────────────────────────────────
+  cdc-daemon:
+    build:
+      context: .
+      dockerfile: docker/cdc-daemon.Dockerfile
+    image: cdc-daemon:latest
+    container_name: cdc-daemon
+    restart: unless-stopped
+    ports:
+      - "50051:50051"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - cdc-net
+
+  # ── BFF API Gateway ─────────────────────────────────────────────────────────
+  cdc-bff:
+    build:
+      context: .
+      dockerfile: docker/cdc-bff.Dockerfile
+    image: cdc-bff:latest
+    container_name: cdc-bff
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      CDC_DAEMON_GRPC_URL: http://cdc-daemon:50051
+    depends_on:
+      cdc-daemon:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:8080/api/cdc/health >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - cdc-net
+
+  # ── Frontend Web Console ────────────────────────────────────────────────────
+  cdc-web-console:
+    build:
+      context: .
+      dockerfile: docker/cdc-web-console.Dockerfile
+    image: cdc-web-console:latest
+    container_name: cdc-web-console
+    restart: unless-stopped
+    ports:
+      - "5174:80"
+    depends_on:
+      cdc-bff:
+        condition: service_started
+    networks:
+      - cdc-net
+
+networks:
+  cdc-net:
+    name: cdc-network
+    driver: bridge
