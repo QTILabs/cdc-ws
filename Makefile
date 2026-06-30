@@ -6,7 +6,7 @@
 
 export CDC_BE_PORT  ?= 8080
 export CDC_GRPC_PORT ?= 50051
-export CDC_FE_PORT  ?= 5173
+export CDC_FE_PORT  ?= 5174
 export CDC_ROOT     ?= /Volumes/Sinise/work/Agent/cdc-ws
 export FE_DIR       ?= $(CDC_ROOT)/cdc-web-console
 export LOG_DIR      ?= /tmp

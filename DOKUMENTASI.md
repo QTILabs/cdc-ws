@@ -245,7 +245,7 @@ Output:
 ═══ CDC Workspace — Semua Running ═══
   Daemon  : http://localhost:50051 (gRPC)
   BFF API : http://localhost:8080   (REST)
-  FE      : http://localhost:5173   (UI)
+  FE      : http://localhost:5174   (UI)
   Login   : admin / admin_password
 ```
 
