@@ -1,4 +1,4 @@
-# Project Structure
+## Project Structure
 ```text
 cdc-web-console/
 ├── package.json
@@ -24,12 +24,6 @@ cdc-web-console/
     ├── components/
     │   ├── Layout.tsx
     │   ├── ProtectedRoute.tsx
-
-    # Feature Notes
-    - `src/routes/dashboard.tsx` renders aggregate metrics and per-sink counters from `/api/cdc/metrics` (`sink_metrics`).
-    - `src/routes/pipelines.tsx` lists active pipelines and supports pause actions.
-    - `src/routes/login.tsx` supports local login and OAuth login (GitHub/OIDC).
-
     │   ├── MetricsCard.tsx
     │   └── PipelineRow.tsx
     ├── lib/
@@ -38,21 +32,27 @@ cdc-web-console/
     └── context/
         └── AuthContext.tsx
 ```
-# Install dependencies
 
-    # Verify production build
-    ```bash
+## Feature Notes
+- `src/routes/dashboard.tsx` renders aggregate metrics and per-sink counters from `/api/cdc/metrics` (`sink_metrics`).
+- `src/routes/pipelines.tsx` lists active pipelines and supports pause actions.
+- `src/routes/login.tsx` supports local login and OAuth login (GitHub/OIDC).
+## Install dependencies
+```bash
+# Verify production build
     pnpm run build
-    ```
-```bash
-    # Run production server locally
-pnpm install
-    pnpm run start
-# Start development server (runs on http://localhost:3000)
-```bash
-pnpm run build
 ```
-# Start production server
+
 ```bash
-pnpm start
+# Run production server locally
+    pnpm install
+    pnpm run start
+```    
+## Start development server (runs on http://localhost:3000)
+```bash
+    pnpm run build
+```
+## Start production server
+```bash
+    pnpm start
 ```
