@@ -1,4 +1,4 @@
-- subscription_name: sub_users
-  target_index: users-idx
-  id_field: user_id
+- subscription_name: sub_laporan_rw_master
+  target_index: laporan_rw_master
+  id_field: id
   batch_size: 1000

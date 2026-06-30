@@ -1,2 +1,27 @@
-/target/
+# ── Rust / Cargo
+target/
+
+# ── Environment
 .env
+
+# ── Node
+node_modules/
+cdc-web-console/node_modules/
+cdc-web-console/dist/
+cdc-web-console/build/
+package-lock.json
+
+# ── IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── OS
+.DS_Store
+Thumbs.db
+
+# ── Logs / Temp
+*.log

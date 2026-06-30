@@ -1,5 +1,6 @@
 mod auth;
 mod error;
+mod swagger;
 
 use axum::{
     Json, Router,
@@ -13,6 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tonic::transport::Channel;
 use tower_http::cors::{Any, CorsLayer};
+use utoipa::OpenApi;
 
 #[allow(clippy::all, clippy::pedantic)]
 pub mod cdc_daemon_proto {
@@ -26,15 +28,15 @@ struct AppState {
     auth_state: Arc<auth::AuthState>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 struct HealthResponseBody {
     is_healthy: bool,
     overall_status: String,
     components: HashMap<String, String>,
 }
 
+#[derive(Serialize, utoipa::ToSchema)]
 #[allow(clippy::struct_field_names)]
-#[derive(Serialize)]
 struct MetricsResponseBody {
     records_ingested: u64,
     records_sunk_success: u64,
@@ -42,7 +44,7 @@ struct MetricsResponseBody {
     records_dlq: u64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 struct PipelineStatusBody {
     subscription_name: String,
     target_index: String,
@@ -50,16 +52,34 @@ struct PipelineStatusBody {
     state: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 struct ControlResponseBody {
     success: bool,
     message: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 struct ListPipelinesResponseBody {
     pipelines: Vec<PipelineStatusBody>,
 }
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        get_health,
+        get_metrics,
+        list_pipelines,
+        reload_pipelines,
+    ),
+    components(
+        schemas(HealthResponseBody, MetricsResponseBody, PipelineStatusBody, ControlResponseBody, ListPipelinesResponseBody)
+    ),
+    tags(
+        (name = "cdc", description = "CDC Pipeline Management"),
+        (name = "auth", description = "Authentication"),
+    )
+)]
+struct ApiDoc;
 
 #[tokio::main]
 async fn main() -> error::AppResult<()> {
@@ -156,6 +176,7 @@ async fn main() -> error::AppResult<()> {
     let app = Router::new()
         .merge(auth_routes)
         .merge(cdc_routes)
+        .merge(swagger::swagger_routes(state.clone()))
         .layer(cors)
         .with_state(state.clone());
 
@@ -172,6 +193,14 @@ fn env_or_default(name: &'static str, default: &str) -> String {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/cdc/health",
+    tag = "cdc",
+    responses(
+        (status = 200, description = "Health check OK", body = HealthResponseBody)
+    )
+)]
 #[axum::debug_handler]
 async fn get_health(
     State(state): State<Arc<AppState>>,
@@ -191,6 +220,14 @@ async fn get_health(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/cdc/metrics",
+    tag = "cdc",
+    responses(
+        (status = 200, description = "CDC metrics", body = MetricsResponseBody)
+    )
+)]
 #[axum::debug_handler]
 async fn get_metrics(
     State(state): State<Arc<AppState>>,
@@ -211,6 +248,14 @@ async fn get_metrics(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/cdc/pipelines",
+    tag = "cdc",
+    responses(
+        (status = 200, description = "List pipelines", body = ListPipelinesResponseBody)
+    )
+)]
 #[axum::debug_handler]
 async fn list_pipelines(
     State(state): State<Arc<AppState>>,
@@ -236,6 +281,14 @@ async fn list_pipelines(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/cdc/pipelines/reload",
+    tag = "cdc",
+    responses(
+        (status = 200, description = "Reload completed", body = ControlResponseBody)
+    )
+)]
 #[axum::debug_handler]
 async fn reload_pipelines(
     State(state): State<Arc<AppState>>,
