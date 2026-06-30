@@ -1,15 +1,14 @@
 import { defineConfig } from "vite";
-import solidPlugin from "vite-plugin-solid";
+import { nitroV2Plugin as nitro } from "@solidjs/vite-plugin-nitro-2";
+import tailwindcss from "@tailwindcss/vite";
+import { solidStart } from "@solidjs/start/config";
 
 export default defineConfig({
-  plugins: [solidPlugin()],
+  plugins: [solidStart(),
+    nitro(),
+    tailwindcss(),
+  ],
   server: {
     port: 3000,
-    proxy: {
-      "/api": {
-        target: "http://localhost:8080",
-        changeOrigin: true,
-      },
-    },
   },
 });
