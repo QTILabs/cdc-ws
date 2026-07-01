@@ -1,11 +1,12 @@
+import { A, useLocation, useNavigate } from "@solidjs/router";
+import { GitBranch, LayoutDashboard, LogOut } from "lucide-solid";
 import { ParentProps } from "solid-js";
-import { useNavigate, A } from "@solidjs/router";
 import { useAuth } from "~/context/AuthContext";
-import { LayoutDashboard, GitBranch, LogOut } from "lucide-solid";
 
 export default function Layout(props: ParentProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
@@ -13,10 +14,10 @@ export default function Layout(props: ParentProps) {
   };
 
   const linkClass = (path: string) => {
-    const currentPath = window.location.pathname;
-    const isActive = currentPath === path || currentPath.startsWith(path + "/");
+    // const isActive = currentPath === path || currentPath.startsWith(path + "/");
+    const isActive = location.pathname === path;
     return `flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-      isActive ? "bg-primary-600 text-white" : "text-slate-700 hover:bg-slate-100"
+      isActive ? "bg-primary text-white" : "text-slate-700 hover:bg-slate-100"
     }`;
   };
 
