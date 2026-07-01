@@ -39,11 +39,15 @@ COPY cdc-web-console/pnpm-lock.yaml cdc-web-console/package.json ./
 RUN --mount=type=cache,target=/app/.pnpm-store,sharing=locked \
     pnpm install --frozen-lockfile --prod=false
 
-# ── Source layer ─────────────────────────────────────────────────────────
+# ── Source layer ─────────────────────────────────────────────
 # Copy everything except what .dockerignore excludes.
 COPY cdc-web-console/ ./
 
-# ── Build ────────────────────────────────────────────────────────────────
+# Debug: verify entry file exists
+RUN ls -la src/app.tsx src/app.jsx 2>&1 || true
+RUN ls -la vite.config.ts package.json 2>&1 || true
+
+# ── Build ────────────────────────────────────────────────────
 ENV NODE_ENV=production
 RUN --mount=type=cache,target=/app/.pnpm-store,sharing=locked \
     pnpm build
