@@ -1,24 +1,28 @@
 # CDC Workspace — Docker Compose
 # =============================================================================
 # Usage:
-#   docker compose up -d          # Start semua service
-#   docker compose up -d cdc-bff  # Start satu service
-#   docker compose logs -f        # Lihat log
-#   docker compose down           # Stop semua
-#   docker compose build          # Build ulang
+#   docker compose build          # Build all images
+#   docker compose up -d          # Start all services
+#   docker compose up -d cdc-daemon  # Start single service
+#   docker compose logs -f        # Tail logs
+#   docker compose down           # Stop all
 #
-# Prasyarat:
-#   - Copy .env.example → .env   lalu isi OS_PASSWORD & IP sesuai env
-#   - Jalankan dari project root (cdc-ws/)
+# Prerequisites:
+#   cp .env.example .env          # Fill in OS_PASSWORD, RW_HOST, etc.
 # =============================================================================
 
 services:
 
-  # ── CDC Daemon ──────────────────────────────────────────────────────────────
   cdc-daemon:
     build:
       context: .
-      dockerfile: docker/cdc-daemon.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PACKAGE: cdc-daemon
+        BINARY: cdc-daemon
+        EXPOSE_PORT: "50051"
+        RUST_IMAGE: rust:1.88-slim-bookworm
+        RUNTIME_IMAGE: debian:bookworm-slim
     image: cdc-daemon:latest
     container_name: cdc-daemon
     restart: unless-stopped
@@ -31,14 +35,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
     networks:
       - cdc-net
 
-  # ── BFF API Gateway ─────────────────────────────────────────────────────────
   cdc-bff:
     build:
       context: .
-      dockerfile: docker/cdc-bff.Dockerfile
+      dockerfile: docker/Dockerfile
+      args:
+        PACKAGE: cdc-bff
+        BINARY: cdc-bff
+        EXPOSE_PORT: "8080"
+        RUST_IMAGE: rust:1.88-slim-bookworm
+        RUNTIME_IMAGE: debian:bookworm-slim
     image: cdc-bff:latest
     container_name: cdc-bff
     restart: unless-stopped
@@ -65,8 +75,6 @@ services:
     networks:
       - cdc-net
 
-  # ── Frontend Web Console ────────────────────────────────────────────────────
-  # SolidStart SSR → Node.js runtime
   cdc-web-console:
     build:
       context: .
@@ -78,12 +86,10 @@ services:
       - "3000:3000"
     depends_on:
       cdc-bff:
-        condition: service_started
+        condition: service_healthy
     networks:
       - cdc-net
 
-  # ── Nginx Ingress ───────────────────────────────────────────────────────────
-  # Reverse proxy: /api → BFF, everything else → FE
   nginx-ingress:
     image: nginx:1.27-alpine
     container_name: nginx-ingress
@@ -94,7 +100,7 @@ services:
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       cdc-bff:
-        condition: service_started
+        condition: service_healthy
       cdc-web-console:
         condition: service_started
     networks:

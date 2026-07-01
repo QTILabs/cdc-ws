@@ -1,28 +1,51 @@
-# Docker build context — only exclude what we don't need
+# =============================================================================
+# CDC Workspace — Docker Build Context
+# Rules are evaluated from top to bottom; later rules override earlier ones.
+# Keep this list minimal — every extra line = more COPY work = slower builds.
+# =============================================================================
 
-# Build artifacts (Rust build output — NOT Cargo.lock)
+# ── Build artifacts ────────────────────────────────────────────────────────────
+# Rust incremental compiles + generated code (rebuilt from Cargo.lock + source)
 target/
 
-# Version control
+# ── Version control ───────────────────────────────────────────────────────────
 .git/
 .gitignore
 
-# IDE
+# ── IDE ─────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Logs
+# ── Logs ─────────────────────────────────────────────────────────────────────
 *.log
+logs/
 
-# OS noise
+# ── OS noise ────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+*~
 
-# Large generated dirs (will be rebuilt anyway)
+# ── Node.js (rebuilt inside Docker via multi-stage) ───────────────────────────
+# These are NEVER needed in the Docker build context — they are rebuilt
+# inside the build stage from package.json + lockfile.
 cdc-web-console/node_modules/
 cdc-web-console/dist/
 cdc-web-console/build/
+cdc-web-console/.output/
 
-# Temporary / cache
+# ── Caches ──────────────────────────────────────────────────────────────────
 **/.cache/
 **/.parcel-cache/
+**/.turbo/
+**/.vite/
+
+# ── Temporary ────────────────────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig
+
+# ── Secrets / local config (should be mounted via env_file or volume) ─────────
+.env
+!.env.example
