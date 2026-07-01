@@ -1,4 +1,8 @@
-const API_BASE = "http://localhost:8080/api";
+// API base: /api in Docker (nginx proxy), or VITE_API_BASE env in dev
+const API_BASE =
+  typeof window !== "undefined" && import.meta.env.VITE_API_BASE
+    ? import.meta.env.VITE_API_BASE
+    : "/api";
 
 export interface HealthResponse {
   is_healthy: boolean;
@@ -35,38 +39,6 @@ export interface TokenResponse {
   user: string;
 }
 
-// async function fetchWithAuth<T>(
-//   endpoint: string,
-//   options: RequestInit = {}
-// ): Promise<T> {
-//   const token = localStorage.getItem("jwt_token");
-//   const headers: HeadersInit = {
-//     "Content-Type": "application/json",
-//     ...options.headers,
-//   };
-
-//   if (token) {
-//     headers.Authorization = `Bearer ${token}`;
-//   }
-
-//   const response = await fetch(`${API_BASE}${endpoint}`, {
-//     ...options,
-//     headers,
-//   });
-
-//   if (response.status === 401) {
-//     localStorage.removeItem("jwt_token");
-//     localStorage.removeItem("jwt_user");
-//     window.location.href = "/login";
-//     throw new Error("Unauthorized");
-//   }
-
-//   if (!response.ok) {
-//     throw new Error(`HTTP ${response.status}`);
-//   }
-
-//   return response.json();
-// }
 async function fetchWithAuth<T>(
   endpoint: string,
   options: RequestInit = {}

@@ -12,6 +12,7 @@ use axum::{
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tonic::transport::Channel;
 use tower_http::cors::{Any, CorsLayer};
 use utoipa::OpenApi;
@@ -84,7 +85,20 @@ struct ApiDoc;
 #[tokio::main]
 async fn main() -> error::AppResult<()> {
     let grpc_url = env_or_default("CDC_DAEMON_GRPC_URL", "http://localhost:50051");
-    let grpc_client = CdcManagementClient::connect(grpc_url).await?;
+    // Retry gRPC connection with exponential backoff (daemon may not be ready yet)
+    let grpc_client = loop {
+        match CdcManagementClient::connect(grpc_url.clone()).await {
+            Ok(client) => break client,
+            Err(e) => {
+                eprintln!(
+                    "[BFF] gRPC connect failed ({}), retrying in 3s...",
+                    e
+                );
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+        }
+    };
+    println!("[BFF] gRPC connected to {}", grpc_url);
 
     let jwt_secret = env_or_default("JWT_SECRET", "super_secret_key_change_me");
     let mut local_users = HashMap::new();
@@ -178,7 +192,9 @@ async fn main() -> error::AppResult<()> {
         .merge(cdc_routes)
         .merge(swagger::swagger_routes(state.clone()))
         .layer(cors)
-        .with_state(state.clone());
+        .with_state(state.clone())
+        // Public health check for nginx/docker healthcheck (no auth)
+        .route("/healthz", get(healthz));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
     println!("BFF REST API (with Auth) listening on http://localhost:8080");
@@ -305,4 +321,10 @@ async fn reload_pipelines(
             })
         })
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Public health check — no auth required, used by Docker/nginx healthcheck
+#[axum::debug_handler]
+async fn healthz() -> StatusCode {
+    StatusCode::OK
 }

@@ -10,5 +10,12 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
+    // Proxy /api calls to BFF during local dev (bypasses CORS, no need for full URL)
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+    },
   },
 });

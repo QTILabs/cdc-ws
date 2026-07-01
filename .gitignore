@@ -32,3 +32,6 @@ Dockerfile
 Dockerfile.bff
 Dockerfile.ctl
 Dockerfile.fe
+
+.nitro
+.output
