@@ -8,16 +8,16 @@ COPY cdc-web-console/package.json ./
 COPY cdc-web-console/pnpm-lock.yaml* ./
 COPY cdc-web-console/package-lock.json* ./
 
-# Approve build scripts (pnpm v11+ blocks unknown build scripts)
+# Approve build scripts directly in package.json (pnpm v11+ blocks unknown)
+# This avoids interactive `pnpm approve-builds` in Docker
 RUN corepack enable && \
-    echo 'onlyBuiltDependencies[]=@parcel/watcher' >> .npmrc && \
-    echo 'onlyBuiltDependencies[]=esbuild' >> .npmrc
-
-RUN if [ -f pnpm-lock.yaml ]; then \
-        corepack enable && pnpm install --frozen-lockfile; \
-    else \
-        npm ci; \
-    fi
+    node -e "
+      const p = require('./package.json');
+      p.pnpm = p.pnpm || {};
+      p.pnpm.onlyBuiltDependencies = ['@parcel/watcher', 'esbuild'];
+      require('fs').writeFileSync('./package.json', JSON.stringify(p, null, '  '));
+    " && \
+    pnpm install --frozen-lockfile
 
 # ── Stage 2: Build ──────────────────────────────────────────────
 FROM node:22-alpine AS builder
