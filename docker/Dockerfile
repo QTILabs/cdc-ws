@@ -79,6 +79,9 @@ RUN apt-get update \
 
 COPY --from=builder /workspace/${BINARY} /usr/local/bin/${BINARY}
 
+# Ensure execute permission (multi-stage COPY can strip +x on some Docker versions)
+RUN chmod +x /usr/local/bin/${BINARY}
+
 EXPOSE ${EXPOSE_PORT}
 
 # Hardcode binary path — no shell expansion, no broken empty-string fallback
