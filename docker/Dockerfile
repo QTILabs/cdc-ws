@@ -75,12 +75,11 @@ RUN apt-get update \
         libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /workspace/${BINARY} /usr/local/bin/
+COPY --from=builder /workspace/${BINARY} /usr/local/bin/${BINARY}
 
 EXPOSE ${EXPOSE_PORT}
 
-# Shell form + exec = proper signal handling + ARG expansion in binary name
-ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/${BINARY}"]
-
+# Hardcode binary path — no shell expansion, no broken empty-string fallback
+ENTRYPOINT ["/bin/sh", "-lc", "exec /usr/local/bin/${BINARY}"]
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=20s \
     CMD ["true"]
