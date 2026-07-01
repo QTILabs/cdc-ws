@@ -58,8 +58,8 @@ ARG BINARY=${PACKAGE}
 COPY --from=builder /workspace/target /workspace/target
 COPY --from=builder /usr/local/cargo/registry /usr/local/cargo/registry
 
-# Copy full source (only src/ actually matters now, but workspace resolution
-# needs all member manifests + proto/)
+# Copy full source for workspace resolution + build
+COPY Cargo.toml ./
 COPY Cargo.lock ./
 COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
