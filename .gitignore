@@ -28,10 +28,11 @@ Thumbs.db
 
 # ── Local
 Makefile
-Dockerfile
-Dockerfile.bff
-Dockerfile.ctl
-Dockerfile.fe
+# Root-level legacy Dockerfiles (kept for backward compat but untracked)
+/Dockerfile
+/Dockerfile.bff
+/Dockerfile.ctl
+/Dockerfile.fe
 
 .nitro
 .output
