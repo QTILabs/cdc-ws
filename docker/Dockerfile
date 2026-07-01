@@ -66,6 +66,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 FROM ${RUNTIME_IMAGE}
 ARG BINARY
 ARG EXPOSE_PORT
+# Persist build ARG as runtime ENV so ENTRYPOINT shell can expand it
+ENV BINARY=${BINARY}
 
 WORKDIR /app
 
