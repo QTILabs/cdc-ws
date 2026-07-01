@@ -1,6 +1,6 @@
 # Docker build context — only exclude what we don't need
 
-# Build artifacts
+# Build artifacts (Rust build output — NOT Cargo.lock)
 target/
 
 # Version control

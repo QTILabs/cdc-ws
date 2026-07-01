@@ -1,41 +1,45 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, GitBranch, LogOut } from 'lucide-react';
+import { ParentProps } from "solid-js";
+import { useNavigate, A } from "@solidjs/router";
+import { useAuth } from "~/context/AuthContext";
+import { LayoutDashboard, GitBranch, LogOut } from "lucide-solid";
 
-export default function Layout() {
+export default function Layout(props: ParentProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
     logout();
-    void navigate('/login');
+    navigate("/login");
   };
 
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-      isActive ? 'bg-primary-600 text-white' : 'text-slate-700 hover:bg-slate-100'
+  const linkClass = (path: string) => {
+    const currentPath = window.location.pathname;
+    const isActive = currentPath === path || currentPath.startsWith(path + "/");
+    return `flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+      !isActive ? "bg-primary text-white" : "text-slate-700 hover:bg-slate-100"
     }`;
+  };
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div class="flex h-screen bg-slate-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col">
-        <div className="p-6 border-b border-slate-200">
-          <h1 className="text-xl font-bold text-slate-900">CDC Console</h1>
-          <p className="text-xs text-slate-500 mt-1">RisingWave • OpenSearch</p>
+      <aside class="w-64 bg-white border-r border-slate-200 flex flex-col">
+        <div class="p-6 border-b border-slate-200">
+          <h1 class="text-xl font-bold text-slate-900">CDC Console</h1>
+          <p class="text-xs text-slate-500 mt-1">RisingWave • OpenSearch • Qdrant</p>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
-          <NavLink to="/dashboard" className={linkClass}>
+        <nav class="flex-1 p-4 space-y-1">
+          <A href="/dashboard" class={linkClass("/dashboard")}>
             <LayoutDashboard size={18} /> Dashboard
-          </NavLink>
-          <NavLink to="/pipelines" className={linkClass}>
+          </A>
+          <A href="/pipelines" class={linkClass("/pipelines")}>
             <GitBranch size={18} /> Pipelines
-          </NavLink>
+          </A>
         </nav>
-        <div className="p-4 border-t border-slate-200">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-600 truncate">{user}</span>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-red-500">
+        <div class="p-4 border-t border-slate-200">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-600 truncate">{user()}</span>
+            <button onClick={handleLogout} class="text-slate-400 hover:text-red-500">
               <LogOut size={18} />
             </button>
           </div>
@@ -43,10 +47,8 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">
-          <Outlet />
-        </div>
+      <main class="flex-1 overflow-auto">
+        <div class="p-8">{props.children}</div>
       </main>
     </div>
   );

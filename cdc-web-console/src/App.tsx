@@ -1,39 +1,32 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
-import { useAuth } from './hooks/useAuth';
-import ProtectedRoute from './components/ProtectedRoute';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import OAuthCallback from './pages/OauthCallback';
-import Dashboard from './pages/Dashboard';
-import Pipelines from './pages/Pipelines';
+import { Router } from "@solidjs/router";
+import { FileRoutes } from "@solidjs/start/router";
+import { Suspense } from "solid-js";
+import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import { AuthProvider } from "./context/AuthContext";
+import "./app.css";
 
 export default function App() {
-  const { isLoading } = useAuth();
-
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
-      </div>
-    );
-  }
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        refetchOnWindowFocus: false,
+        retry: 1,
+        staleTime: 5000,
+      },
+    },
+  });
 
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/auth/callback" element={<OAuthCallback />} />
-      <Route
-        element={
-          <ProtectedRoute>
-            <Layout />
-          </ProtectedRoute>
-        }
+    <QueryClientProvider client={queryClient}>
+      <Router
+        root={(props) => (
+          <AuthProvider>
+            <Suspense>{props.children}</Suspense>
+          </AuthProvider>
+        )}
       >
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/pipelines" element={<Pipelines />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <FileRoutes />
+      </Router>
+    </QueryClientProvider>
   );
 }

@@ -13,7 +13,7 @@ RUN apt-get update \
         protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-COPY Cargo.toml Cargo.lock ./
+COPY cargo.toml Cargo.lock ./
 COPY proto ./proto
 
 # Copy all workspace members (needed for workspace resolution)

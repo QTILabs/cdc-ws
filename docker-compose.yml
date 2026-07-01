@@ -9,6 +9,7 @@
 #
 # Prasyarat:
 #   - Copy .env.example → .env   lalu isi OS_PASSWORD & IP sesuai env
+#   - Jalankan dari project root (cdc-ws/)
 # =============================================================================
 
 services:
@@ -47,6 +48,7 @@ services:
       - .env
     environment:
       CDC_DAEMON_GRPC_URL: http://cdc-daemon:50051
+      JWT_SECRET: ${JWT_SECRET:-change-me}
     depends_on:
       cdc-daemon:
         condition: service_started
@@ -54,7 +56,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -sf http://localhost:8080/api/cdc/health >/dev/null 2>&1 || exit 1",
+          "wget --no-verbose --tries=1 --spider http://localhost:8080/api/cdc/health || exit 1",
         ]
       interval: 30s
       timeout: 10s

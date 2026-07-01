@@ -1,15 +1,14 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from "vite";
+import { nitroV2Plugin as nitro } from "@solidjs/vite-plugin-nitro-2";
+import tailwindcss from "@tailwindcss/vite";
+import { solidStart } from "@solidjs/start/config";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [solidStart(),
+    nitro(),
+    tailwindcss(),
+  ],
   server: {
-    port: 5174,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080', // Rust BFF
-        changeOrigin: true,
-      },
-    },
+    port: 3000,
   },
 });
