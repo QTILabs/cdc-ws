@@ -61,7 +61,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me}
     depends_on:
       cdc-daemon:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test:
         [
