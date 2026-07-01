@@ -17,8 +17,8 @@
 ARG RUST_IMAGE=rust:1.88-slim-bookworm
 ARG RUNTIME_IMAGE=debian:bookworm-slim
 
-# ── Stage 1: Cargo Chef (dependency caching) ──────────────────────────────────
-# Using cargo-chef for deterministic dependency layer caching.
+# ── Stage 1: Cargo Chef install ─────────────────────────────────────────────
+# cargo-chef generates a recipe.json for deterministic dependency caching.
 FROM ${RUST_IMAGE} AS chef
 WORKDIR /workspace
 
@@ -32,50 +32,39 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && cargo install cargo-chef --locked --version 0.1.70
 
-# ── Stage 2: Dependency resolution ────────────────────────────────────────────
+# ── Stage 2: Generate recipe ────────────────────────────────────────────────
 FROM chef AS planner
 COPY . .
-# Generate recipe for dependency caching (excludes src/ content)
 RUN cargo chef prepare --recipe-path recipe.json
 
-# ── Stage 3: Build dependencies (cached layer) ────────────────────────────────
+# ── Stage 3: Build ──────────────────────────────────────────────────────────
 FROM chef AS builder
 ARG PACKAGE
 ARG BINARY=${PACKAGE}
 
+# Recipe only (no src/) — dependency-only build for caching
 COPY --from=planner /workspace/recipe.json /workspace/recipe.json
 
-# Build **only** dependencies — src/ is not yet copied.
+# Cook dependencies (target written to real filesystem, NOT cache mount)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,target=/workspace/target,sharing=locked \
     cargo chef cook --release --recipe-path recipe.json --package ${PACKAGE}
 
-# ── Stage 4: Build binary ────────────────────────────────────────────────────
-FROM chef AS final-builder
-ARG PACKAGE
-ARG BINARY=${PACKAGE}
-
-COPY --from=builder /workspace/target /workspace/target
-COPY --from=builder /usr/local/cargo/registry /usr/local/cargo/registry
-
-# Copy full source for workspace resolution + build
+# Copy full workspace source (all member manifests required for resolution)
 COPY Cargo.toml ./
 COPY Cargo.lock ./
 COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
-COPY cdc-bff/ cdc-bff/
-COPY cdc-ctl/ cdc-ctl/
+COPY cdc-bff/   cdc-bff/
+COPY cdc-ctl/   cdc-ctl/
 
-# Build with cache mounts for maximum reuse
+# Build final binary (target/ already has deps from cargo chef cook)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,target=/workspace/target,sharing=locked \
     cargo build --release --locked --package ${PACKAGE} \
-    && cp /workspace/target/release/${BINARY} /workspace/${BINARY}
+    && cp target/release/${BINARY} /workspace/${BINARY}
 
-# ── Stage 5: Runtime image ────────────────────────────────────────────────────
+# ── Stage 4: Runtime image ──────────────────────────────────────────────────
 FROM ${RUNTIME_IMAGE}
-ARG PACKAGE
-ARG BINARY=${PACKAGE}
+ARG BINARY
 ARG EXPOSE_PORT
 
 WORKDIR /app
@@ -86,14 +75,12 @@ RUN apt-get update \
         libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=final-builder /workspace/${BINARY} /usr/local/bin/
+COPY --from=builder /workspace/${BINARY} /usr/local/bin/
 
 EXPOSE ${EXPOSE_PORT}
 
 # Shell form + exec = proper signal handling + ARG expansion in binary name
 ENTRYPOINT ["/bin/sh", "-c", "exec /usr/local/bin/${BINARY}"]
 
-# Docker healthcheck (substitute at build time via build args)
-# Override in docker-compose healthcheck if custom endpoint needed.
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=20s \
     CMD ["true"]
