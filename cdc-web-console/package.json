@@ -28,6 +28,9 @@
 	"engines": {
 		"node": ">=18"
 	},
+	"pnpm": {
+		"onlyBuiltDependencies": ["@parcel/watcher", "esbuild"]
+	},
 	"lint-staged": {
 		"*.{js,ts,jsx,tsx,json,jsonc}": [
 			"biome check --write"
