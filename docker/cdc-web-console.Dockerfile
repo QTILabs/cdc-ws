@@ -11,12 +11,7 @@ COPY cdc-web-console/package-lock.json* ./
 # Approve build scripts directly in package.json (pnpm v11+ blocks unknown)
 # This avoids interactive `pnpm approve-builds` in Docker
 RUN corepack enable && \
-    node -e "
-      const p = require('./package.json');
-      p.pnpm = p.pnpm || {};
-      p.pnpm.onlyBuiltDependencies = ['@parcel/watcher', 'esbuild'];
-      require('fs').writeFileSync('./package.json', JSON.stringify(p, null, '  '));
-    " && \
+    echo 'const p=require("./package.json");p.pnpm=p.pnpm||{};p.pnpm.onlyBuiltDependencies=["@parcel/watcher","esbuild"];require("fs").writeFileSync("./package.json",JSON.stringify(p,null,2));' | node && \
     pnpm install --frozen-lockfile
 
 # ── Stage 2: Build ──────────────────────────────────────────────
