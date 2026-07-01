@@ -8,6 +8,11 @@ COPY cdc-web-console/package.json ./
 COPY cdc-web-console/pnpm-lock.yaml* ./
 COPY cdc-web-console/package-lock.json* ./
 
+# Approve build scripts (pnpm v11+ blocks unknown build scripts)
+RUN corepack enable && \
+    echo 'onlyBuiltDependencies[]=@parcel/watcher' >> .npmrc && \
+    echo 'onlyBuiltDependencies[]=esbuild' >> .npmrc
+
 RUN if [ -f pnpm-lock.yaml ]; then \
         corepack enable && pnpm install --frozen-lockfile; \
     else \
