@@ -54,10 +54,11 @@ pub fn load_runtime_config() -> DaemonResult<RuntimeConfig> {
     Ok(RuntimeConfig {
         otlp_endpoint: env_or_default("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_OTLP_ENDPOINT),
         rw_conn_str: format!(
-            "host={} port={} user={} dbname={} sslmode={}",
+            "host={} port={} user={} password={} dbname={} sslmode={}",
             env_or_default("RW_HOST", DEFAULT_RW_HOST),
             env_or_default("RW_PORT", DEFAULT_RW_PORT),
             env_or_default("RW_USER", DEFAULT_RW_USER),
+            required_env("RW_PASSWORD")?,
             env_or_default("RW_DBNAME", DEFAULT_RW_DBNAME),
             env_or_default("RW_SSLMODE", "disable"),
         ),
