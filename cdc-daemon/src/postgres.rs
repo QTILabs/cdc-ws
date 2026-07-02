@@ -51,16 +51,18 @@ pub fn load_runtime_config() -> DaemonResult<RuntimeConfig> {
         Err(_) => hostname.clone(),
     };
 
+    let rw_schema = env_or_default("RW_SCHEMA", "rw_sink");
     Ok(RuntimeConfig {
         otlp_endpoint: env_or_default("OTEL_EXPORTER_OTLP_ENDPOINT", DEFAULT_OTLP_ENDPOINT),
         rw_conn_str: format!(
-            "host={} port={} user={} password={} dbname={} sslmode={}",
+            "host={} port={} user={} password={} dbname={} sslmode={} options='-c search_path={}'",
             env_or_default("RW_HOST", DEFAULT_RW_HOST),
             env_or_default("RW_PORT", DEFAULT_RW_PORT),
             env_or_default("RW_USER", DEFAULT_RW_USER),
-            required_env("RW_PASSWORD")?,
+            env_or_default("RW_PASSWORD", ""),
             env_or_default("RW_DBNAME", DEFAULT_RW_DBNAME),
             env_or_default("RW_SSLMODE", "disable"),
+            rw_schema,
         ),
         os_url: env_or_default("OS_URL", DEFAULT_OS_URL),
         os_user: env_or_default("OS_USER", DEFAULT_OS_USER),
@@ -101,10 +103,17 @@ pub async fn run_producer_loop(
     daemon_state: Arc<DaemonState>,
     cancel_token: CancellationToken,
 ) {
+    let rw_schema = env_or_default("RW_SCHEMA", "rw_sink");
     let unique_cursor = format!(
         "cursor_{}_{}",
         config.subscription_name,
         consumer_id.as_ref()
+    );
+    // Combined BEGIN + SET search_path + DECLARE in single simple_query.
+    // RisingWave requires search_path to resolve subscription in correct schema.
+    let declare_q = format!(
+        "BEGIN READ ONLY; SET search_path TO {}; DECLARE {} SUBSCRIPTION CURSOR FOR {};",
+        rw_schema, unique_cursor, config.subscription_name
     );
 
     loop {
@@ -127,15 +136,9 @@ pub async fn run_producer_loop(
             tokio::spawn(async move {
                 let _ = connection.await;
             });
-            let _ = client
-                .execute(
-                    &format!(
-                        "DECLARE {} SUBSCRIPTION CURSOR FOR {};",
-                        unique_cursor, config.subscription_name
-                    ),
-                    &[],
-                )
-                .await;
+            if let Err(e) = client.simple_query(&declare_q).await {
+                // Log error, don't crash — will retry
+            }
             let _ = run_stream_fetch_pipeline(
                 &client,
                 &config,
