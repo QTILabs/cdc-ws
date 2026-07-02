@@ -38,8 +38,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
-    networks:
-      - cdc-net
+#    networks:
+#      - cdc-net
 
   cdc-bff:
     build:
@@ -69,13 +69,14 @@ services:
         [
           "CMD-SHELL",
           "curl -sf http://localhost:8080/healthz || exit 1",
+#  "wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1",
         ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 20s
-    networks:
-      - cdc-net
+#    networks:
+#      - cdc-net
 
   cdc-web-console:
     build:
@@ -85,30 +86,30 @@ services:
     container_name: cdc-web-console
     restart: unless-stopped
     ports:
-      - "3000:3000"
-    depends_on:
-      cdc-bff:
-        condition: service_healthy
-    networks:
-      - cdc-net
+      - "3005:3000"
+#    depends_on:
+#      cdc-bff:
+#        condition: service_healthy
+#    networks:
+#      - cdc-net
 
   nginx-ingress:
     image: nginx:1.27-alpine
     container_name: nginx-ingress
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "81:80"
     volumes:
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      cdc-bff:
-        condition: service_healthy
-      cdc-web-console:
-        condition: service_started
-    networks:
-      - cdc-net
+#    depends_on:
+#      cdc-bff:
+#        condition: service_healthy
+#      cdc-web-console:
+#        condition: service_started
+#    networks:
+#      - cdc-net
 
-networks:
-  cdc-net:
-    name: cdc-network
-    driver: bridge
+##networks:
+#  cdc-net:
+#    name: cdc-network
+#    driver: bridge

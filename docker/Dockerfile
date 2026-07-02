@@ -59,12 +59,14 @@ COPY cdc-ctl/   cdc-ctl/
 
 # Build final binary (target/ already has deps from cargo chef cook)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    cargo build --release --locked --package ${PACKAGE} \
-    && cp target/release/${BINARY} /workspace/${BINARY}
+    cargo build --release --locked --package ${PACKAGE} 
+#    && cp target/release/${BINARY} /workspace/${BINARY}
 
 # ── Stage 4: Runtime image ──────────────────────────────────────────────────
 FROM ${RUNTIME_IMAGE}
-ARG BINARY
+ARG PACKAGE
+ARG BINARY=cdc-daemon
+#ARG BINARY
 ARG EXPOSE_PORT
 # Persist build ARG as runtime ENV so ENTRYPOINT shell can expand it
 ENV BINARY=${BINARY}
@@ -77,7 +79,9 @@ RUN apt-get update \
         libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /workspace/${BINARY} /usr/local/bin/${BINARY}
+#COPY --from=builder /workspace/${BINARY} /usr/local/bin/${BINARY}
+
+COPY --from=builder /workspace/target/release/${BINARY} /usr/local/bin/${BINARY}
 
 # Ensure execute permission (multi-stage COPY can strip +x on some Docker versions)
 RUN chmod +x /usr/local/bin/${BINARY}
