@@ -1,4 +1,4 @@
-- subscription_name: sub_laporan_rw_master
-  target_index: laporan_rw_master
+- subscription_name: sub_laporan_rw_master_dup
+  target_index: laporan_rw_master_dup
   id_field: id
   batch_size: 1000

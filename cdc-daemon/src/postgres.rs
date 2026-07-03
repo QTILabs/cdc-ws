@@ -105,12 +105,14 @@ pub async fn run_producer_loop(
 ) {
     let rw_schema = env_or_default("RW_SCHEMA", "rw_sink");
     let unique_cursor = format!(
-        "cursor_{}_{}",
+        "\"{}_{}\"",
         config.subscription_name,
         consumer_id.as_ref()
     );
     // Combined BEGIN + SET search_path + DECLARE in single simple_query.
     // RisingWave requires search_path to resolve subscription in correct schema.
+    // Cursor name is quoted with double-quotes because consumer_id may contain hyphens
+    // which are invalid in unquoted PostgreSQL identifiers.
     let declare_q = format!(
         "BEGIN READ ONLY; SET search_path TO {}; DECLARE {} SUBSCRIPTION CURSOR FOR {};",
         rw_schema, unique_cursor, config.subscription_name

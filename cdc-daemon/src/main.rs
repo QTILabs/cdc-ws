@@ -309,7 +309,7 @@ async fn start_pipeline_generation(
         let p_cancel_token = cancel_token.child_token();
         let consumer_id = Arc::clone(&consumer_id);
         let pipeline_name = subscription_name.clone();
-        let cursor_name = format!("cursor_{subscription_name}_{hostname}");
+        let cursor_name = format!("\"{subscription_name}_{hostname}\"");
 
         daemon_state.pipelines.write().await.insert(
             pipeline_name,

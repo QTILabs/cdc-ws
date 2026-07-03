@@ -9,7 +9,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    port: 3000,
+    port: 5174,
     // Proxy /api calls to BFF during local dev (bypasses CORS, no need for full URL)
     proxy: {
       "/api": {
