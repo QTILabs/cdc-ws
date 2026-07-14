@@ -4,7 +4,7 @@
 # CDC Web Console — SolidStart + PNPM Dockerfile
 # =============================================================================
 # Build:
-#   docker build -f docker/cdc-web-console.Dockerfile -t cdc-web-console:latest .
+#   cd cdc-web-console && docker build -f ../docker/cdc-web-console.Dockerfile -t cdc-web-console:latest .
 #   docker compose build cdc-web-console
 # =============================================================================
 
@@ -34,17 +34,13 @@ WORKDIR /app
 # ── Dependency layer (cached) ───────────────────────────────────────────
 # Copy ONLY lockfile + manifest → pnpm install hits cache → layer is stable
 # as long as lockfile doesn't change.
-COPY cdc-web-console/pnpm-lock.yaml cdc-web-console/package.json ./
+COPY pnpm-lock.yaml package.json ./
 
 RUN --mount=type=cache,target=/app/.pnpm-store,sharing=locked \
     pnpm install --frozen-lockfile --prod=false
 
-# ── Source layer ─────────────────────────────────────────────
-# Copy everything except what .dockerignore excludes.
-COPY cdc-web-console/ ./
+COPY . ./
 
-# ── Build ────────────────────────────────────────────────────
-ENV NODE_ENV=production
 RUN --mount=type=cache,target=/app/.pnpm-store,sharing=locked \
     pnpm build
 
