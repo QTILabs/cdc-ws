@@ -32,16 +32,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && cargo install cargo-chef --locked --version 0.1.70
 
-# ── Stage 2: Generate recipe ────────────────────────────────────────────────
-# Only what's needed for cargo-chef: Cargo manifests + source.
-# Copy package manifest first (smaller, stable), then source.
+# ── Stage 2: Generate recipe ───────────────────────────────────────────────
+# Copy ALL workspace members — cargo metadata needs every member listed
+# in Cargo.toml to resolve the workspace, even when building a single package.
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
-# BFF & ctl not needed in workspace recipe if building only cdc-daemon
-#COPY cdc-bff/   cdc-bff/
-#COPY cdc-ctl/   cdc-ctl/
+COPY cdc-bff/    cdc-bff/
+COPY cdc-ctl/    cdc-ctl/
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Stage 3: Build ──────────────────────────────────────────────────────────
@@ -49,32 +48,25 @@ FROM chef AS builder
 ARG PACKAGE
 ARG BINARY=${PACKAGE}
 
-# Recipe only (no src/) — dependency-only build for caching
+# Recipe + all workspace members for cargo metadata resolution
 COPY --from=planner /workspace/recipe.json /workspace/recipe.json
 
-# Cook dependencies (target written to real filesystem, NOT cache mount)
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    cargo chef cook --release --recipe-path recipe.json --package ${PACKAGE}
-
-# Copy only the package being built (no other workspace members)
+# Copy ALL members — cargo build needs them for workspace resolution
 COPY Cargo.toml Cargo.lock ./
 COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
-#COPY cdc-bff/   cdc-bff/
-#COPY cdc-ctl/   cdc-ctl/
+COPY cdc-bff/    cdc-bff/
+COPY cdc-ctl/    cdc-ctl/
 
-# Build final binary (target/ already has deps from cargo chef cook)
+# Build only the requested package (target/ already has deps from cargo chef cook)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    cargo build --release --locked --package ${PACKAGE} 
-#    && cp target/release/${BINARY} /workspace/${BINARY}
+    cargo build --release --locked --package ${PACKAGE}
 
 # ── Stage 4: Runtime image ──────────────────────────────────────────────────
 FROM ${RUNTIME_IMAGE}
 ARG PACKAGE
 ARG BINARY=cdc-daemon
-#ARG BINARY
 ARG EXPOSE_PORT
-# Persist build ARG as runtime ENV so ENTRYPOINT shell can expand it
 ENV BINARY=${BINARY}
 
 WORKDIR /app
@@ -84,8 +76,6 @@ RUN apt-get update \
         ca-certificates \
         libssl3 \
     && rm -rf /var/lib/apt/lists/*
-
-#COPY --from=builder /workspace/${BINARY} /usr/local/bin/${BINARY}
 
 COPY --from=builder /workspace/target/release/${BINARY} /usr/local/bin/${BINARY}
 
