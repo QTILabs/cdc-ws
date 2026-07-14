@@ -33,8 +33,15 @@ RUN apt-get update \
     && cargo install cargo-chef --locked --version 0.1.70
 
 # ── Stage 2: Generate recipe ────────────────────────────────────────────────
+# Only what's needed for cargo-chef: Cargo manifests + source.
+# Copy package manifest first (smaller, stable), then source.
 FROM chef AS planner
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY proto ./proto
+COPY cdc-daemon/ cdc-daemon/
+# BFF & ctl not needed in workspace recipe if building only cdc-daemon
+#COPY cdc-bff/   cdc-bff/
+#COPY cdc-ctl/   cdc-ctl/
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Stage 3: Build ──────────────────────────────────────────────────────────
@@ -49,13 +56,12 @@ COPY --from=planner /workspace/recipe.json /workspace/recipe.json
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     cargo chef cook --release --recipe-path recipe.json --package ${PACKAGE}
 
-# Copy full workspace source (all member manifests required for resolution)
-COPY Cargo.toml ./
-COPY Cargo.lock ./
+# Copy only the package being built (no other workspace members)
+COPY Cargo.toml Cargo.lock ./
 COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
-COPY cdc-bff/   cdc-bff/
-COPY cdc-ctl/   cdc-ctl/
+#COPY cdc-bff/   cdc-bff/
+#COPY cdc-ctl/   cdc-ctl/
 
 # Build final binary (target/ already has deps from cargo chef cook)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \

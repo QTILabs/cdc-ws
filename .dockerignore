@@ -27,13 +27,10 @@ logs/
 Thumbs.db
 *~
 
-# ── Node.js (rebuilt inside Docker via multi-stage) ───────────────────────────
-# These are NEVER needed in the Docker build context — they are rebuilt
-# inside the build stage from package.json + lockfile.
-cdc-web-console/node_modules/
-cdc-web-console/dist/
-cdc-web-console/build/
-cdc-web-console/.output/
+# ── Web Console (separate Dockerfile) ───────────────────────────────────────
+# cargo-chef & Rust builder do NOT need the Node.js project.
+# cdc-web-console/ is built by its own docker/Dockerfile separately.
+cdc-web-console/
 
 # ── Caches ──────────────────────────────────────────────────────────────────
 **/.cache/
