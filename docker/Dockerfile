@@ -80,7 +80,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/target/release/${BINARY} /usr/local/bin/${BINARY}
-COPY --from=builder ./pipelines.yaml ./pipelines.yaml
+COPY --from=builder /workspace/pipelines.yaml ./
 
 # Ensure execute permission (multi-stage COPY can strip +x on some Docker versions)
 RUN chmod +x /usr/local/bin/${BINARY}
