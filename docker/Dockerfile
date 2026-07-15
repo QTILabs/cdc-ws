@@ -41,6 +41,7 @@ COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
 COPY cdc-bff/    cdc-bff/
 COPY cdc-ctl/    cdc-ctl/
+COPY pipelines.yaml ./
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ── Stage 3: Build ──────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ COPY proto ./proto
 COPY cdc-daemon/ cdc-daemon/
 COPY cdc-bff/    cdc-bff/
 COPY cdc-ctl/    cdc-ctl/
-COPY pipelines.yaml /workspace/pipelines.yaml
+COPY pipelines.yaml ./
 
 # Build only the requested package (target/ already has deps from cargo chef cook)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
@@ -79,7 +80,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /workspace/target/release/${BINARY} /usr/local/bin/${BINARY}
-COPY --from=builder /workspace/pipelines.yaml /app/pipelines.yaml
 
 # Ensure execute permission (multi-stage COPY can strip +x on some Docker versions)
 RUN chmod +x /usr/local/bin/${BINARY}
