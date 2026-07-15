@@ -80,8 +80,8 @@ services:
 
   cdc-web-console:
     build:
-      context: cdc-web-console
-      dockerfile: ../docker/cdc-web-console.Dockerfile
+      context: .
+      dockerfile: docker/cdc-web-console.Dockerfile
     image: cdc-web-console:latest
     container_name: cdc-web-console
     restart: unless-stopped

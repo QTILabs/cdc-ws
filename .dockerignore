@@ -27,10 +27,13 @@ logs/
 Thumbs.db
 *~
 
-# ── Web Console (separate Dockerfile) ───────────────────────────────────────
-# cargo-chef & Rust builder do NOT need the Node.js project.
-# cdc-web-console/ is built by its own docker/Dockerfile separately.
-cdc-web-console/
+# ── Web Console caches (exclude large node_modules/dist, keep source) ─────
+# pnpm-lock.yaml stays in context (~2MB) — acceptable tradeoff for compose compatibility
+cdc-web-console/node_modules/
+cdc-web-console/.pnpm-store/
+cdc-web-console/.output/
+cdc-web-console/dist/
+cdc-web-console/build/
 
 # ── Caches ──────────────────────────────────────────────────────────────────
 **/.cache/

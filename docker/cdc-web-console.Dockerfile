@@ -34,12 +34,12 @@ WORKDIR /app
 # ── Dependency layer (cached) ───────────────────────────────────────────
 # Copy ONLY lockfile + manifest → pnpm install hits cache → layer is stable
 # as long as lockfile doesn't change.
-COPY pnpm-lock.yaml package.json ./
+COPY cdc-web-console/pnpm-lock.yaml cdc-web-console/package.json ./
 
 RUN --mount=type=cache,target=/app/.pnpm-store,sharing=locked \
     pnpm install --frozen-lockfile --prod=false
 
-COPY . ./
+COPY cdc-web-console/ ./
 
 RUN --mount=type=cache,target=/app/.pnpm-store,sharing=locked \
     pnpm build
